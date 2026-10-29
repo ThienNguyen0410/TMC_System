@@ -1,0 +1,26 @@
+@use '../abstracts/variables' as *;
+@use '../abstracts/mixins' as *;
+
+.statistics-table-card {
+  .ant-card-extra {
+    padding-inline-start: $space-3;
+  }
+}
+
+@include respond(sm) {
+  .statistics-table-card {
+    .ant-card-head {
+      align-items: flex-start;
+    }
+
+    .ant-card-head-wrapper {
+      flex-wrap: wrap;
+      gap: $space-3;
+    }
+
+    .ant-card-extra {
+      margin-inline-start: 0;
+      padding-inline-start: 0;
+    }
+  }
+}

@@ -1,0 +1,105 @@
+@use '../abstracts/variables' as *;
+@use '../abstracts/mixins' as *;
+
+.ant-layout {
+  background: $color-bg;
+}
+
+.ant-card {
+  border-color: $color-border;
+  box-shadow: $shadow-soft;
+}
+
+.ant-card-head {
+  min-height: 64px;
+  border-bottom-color: $color-border;
+}
+
+.ant-card-head-title {
+  font-weight: 700;
+  color: $color-text;
+}
+
+.ant-table {
+  font-size: 0.875rem;
+}
+
+.ant-table-thead > tr > th {
+  padding-block: 12px !important;
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $color-text-muted !important;
+  background: $color-surface-muted !important;
+  border-bottom-color: $color-border !important;
+}
+
+.ant-table-tbody > tr > td {
+  padding-block: 14px !important;
+  border-bottom-color: $color-border !important;
+}
+
+.ant-table-tbody > tr.ant-table-row:hover > td {
+  background: #f8fbff !important;
+}
+
+.ant-table-pagination.ant-pagination {
+  margin-bottom: 4px !important;
+}
+
+.ant-form-item-label > label {
+  font-weight: 600;
+  color: $color-text;
+}
+
+.ant-btn {
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.ant-btn-primary {
+  box-shadow: 0 6px 16px rgba(29, 78, 216, 0.18);
+}
+
+.ant-tag {
+  padding-inline: 10px;
+  font-weight: 600;
+  border-radius: $radius-pill;
+}
+
+.ant-modal-content {
+  border-radius: $radius-lg;
+}
+
+.ant-modal-title {
+  font-size: 1.15rem;
+}
+
+.ant-breadcrumb {
+  font-size: 0.8rem;
+
+  a,
+  li:last-child {
+    color: $color-text-muted;
+  }
+}
+
+.ant-progress-text {
+  font-weight: 700;
+}
+
+.ant-empty-description {
+  color: $color-text-muted;
+}
+
+@include respond(sm) {
+  .ant-card-body {
+    padding: $space-4;
+  }
+
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    white-space: nowrap;
+  }
+}

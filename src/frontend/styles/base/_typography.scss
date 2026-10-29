@@ -1,0 +1,63 @@
+@use '../abstracts/variables' as *;
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  color: $color-text;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h1 {
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+}
+
+h2 {
+  font-size: clamp(1.4rem, 2.4vw, 1.85rem);
+}
+
+h3 {
+  font-size: 1.15rem;
+}
+
+h4 {
+  font-size: 1rem;
+}
+
+p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+small {
+  font-size: 0.78rem;
+}
+
+.eyebrow {
+  display: inline-block;
+  margin-bottom: $space-2;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: $color-text-muted;
+}
+
+.text-muted {
+  color: $color-text-muted;
+}
+
+.text-soft {
+  color: $color-text-soft;
+}
+
+.mono {
+  font-family: $font-family-mono;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}

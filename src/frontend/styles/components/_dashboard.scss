@@ -1,0 +1,240 @@
+@use '../abstracts/variables' as *;
+@use '../abstracts/mixins' as *;
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
+  align-items: stretch;
+  gap: $space-5;
+
+  > .ant-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  > .ant-card > .ant-card-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+  }
+
+  .trend-chart {
+    flex: 1;
+  }
+
+  .trend-chart__plot {
+    flex: 1;
+    min-height: 230px;
+  }
+}
+
+.trend-chart {
+  display: flex;
+  flex-direction: column;
+  gap: $space-4;
+}
+
+.trend-chart__plot {
+  display: flex;
+  align-items: stretch;
+  gap: clamp(6px, 1.6vw, 20px);
+  height: 230px;
+  padding: 12px 4px 0;
+  border-bottom: 1px solid $color-border;
+}
+
+.trend-chart__column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+  gap: 4px;
+}
+
+.trend-chart__track {
+  display: flex;
+  flex: 1;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 54px;
+}
+
+.trend-chart__bar {
+  display: flex;
+  flex-direction: column-reverse;
+  width: 100%;
+  min-height: 2px;
+  overflow: hidden;
+  background: $color-surface-muted;
+  border-radius: $radius-sm $radius-sm 3px 3px;
+  transition: height $transition-base;
+}
+
+.trend-chart__bar--empty {
+  min-height: 2px;
+  background: transparent;
+  border-top: 2px solid $color-border;
+  border-radius: 0;
+}
+
+.trend-chart__segment {
+  display: block;
+  width: 100%;
+  min-height: 0;
+}
+
+.trend-chart__segment--present {
+  background: $color-success;
+}
+
+.trend-chart__segment--late {
+  background: #d97706;
+}
+
+.trend-chart__segment--absent {
+  background: $color-danger;
+}
+
+.trend-chart__segment--incomplete {
+  background: $color-text-soft;
+}
+
+.trend-chart__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: $color-text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.trend-chart__value {
+  font-size: 0.66rem;
+  color: $color-text-soft;
+}
+
+.trend-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-2 $space-4;
+  font-size: 0.74rem;
+  color: $color-text-muted;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+.trend-chart__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+
+.trend-chart__dot--present {
+  background: $color-success;
+}
+
+.trend-chart__dot--late {
+  background: #d97706;
+}
+
+.trend-chart__dot--absent {
+  background: $color-danger;
+}
+
+.trend-chart__dot--incomplete {
+  background: $color-text-soft;
+}
+
+.dashboard-glance {
+  .ant-card-body {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.glance {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-4;
+}
+
+.glance__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: $color-text;
+  text-align: center;
+
+  small {
+    font-size: 0.7rem;
+    font-weight: 400;
+    color: $color-text-muted;
+  }
+}
+
+.glance__list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 7px;
+  margin-top: auto;
+}
+
+.glance__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: $color-surface-muted;
+  border: 1px solid $color-border;
+  border-radius: $radius-sm;
+
+  strong {
+    font-size: 0.92rem;
+    color: $color-text;
+  }
+}
+
+.recent-activity__name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: $color-text;
+}
+
+.recent-activity__username {
+  display: block;
+  font-size: 0.7rem;
+  color: $color-text-soft;
+}
+
+@include respond(xl) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@include respond(sm) {
+  .trend-chart__plot {
+    gap: 5px;
+    height: 200px;
+  }
+
+  .trend-chart__value {
+    display: none;
+  }
+
+  .dashboard-glance .ant-card-body {
+    padding: 16px;
+  }
+}
