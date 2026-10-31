@@ -40,9 +40,6 @@ export function ProfileCard({ user }: ProfileCardProps) {
             </div>
           </div>
           <div className="profile-summary__actions">
-            <Button type="primary" icon={<EditOutlined />} onClick={() => setEditOpen(true)}>
-              Edit Profile
-            </Button>
             {isEmployee && (
               <Button icon={<QrcodeOutlined />} onClick={() => setQrOpen(true)}>
                 Attendance QR

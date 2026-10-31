@@ -11,6 +11,7 @@ const routeMetaMap: Record<string, RouteMeta> = {
   '/employee/dashboard': { section: 'Employee', title: 'Dashboard' },
   '/employee/profile': { section: 'Employee', title: 'My Profile' },
   '/admin/dashboard': { section: 'Administration', title: 'Dashboard' },
+  '/admin/management': { section: 'Administration', title: 'Management' },
   '/admin/statistics': { section: 'Administration', title: 'Attendance Statistics' },
   '/admin/profile': { section: 'Administration', title: 'My Profile' },
 }

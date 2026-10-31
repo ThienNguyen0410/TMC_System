@@ -1,276 +1,424 @@
 # TMC System
 
-TMC System is a modular monolith for employee attendance management. It records attendance, synchronizes recorded attendance with an existing external HR/Payroll system, and generates attendance statistics on demand when a user opens the Statistics page.
+TMC System is an employee attendance management application for an enterprise environment. The repository contains a React frontend, a Node.js backend, and a PostgreSQL database schema.
 
-The application is one deployable unit with clear internal module boundaries. The backend does not call another service for its own business operations; modules communicate through explicit application contracts, while the external HR/Payroll system is accessed through an adapter behind a port.
+The current implementation focuses on authentication. Login credentials are checked against the `"user".test_account` table in PostgreSQL. The application does not use JWT. After a successful login, the frontend stores the current user session in local storage and redirects the user according to their role.
 
-## Architecture Overview
+The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. These screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
 
-The source code is organized into three top-level areas under `src/`:
-
-- `frontend`: React and TypeScript user interface.
-- `backend`: modular monolith application and HTTP API.
-- `database`: SQL schema, migrations, seed data, and reporting queries.
-
-The backend follows a module-first layout. Each business module contains its own controller, service, domain model, repository contract, routes, and shared types. Technical concerns that are used by multiple modules live in `shared`, while concrete adapters for databases and external systems live in `infrastructure`.
-
-The main principles are:
-
-- Controllers handle HTTP input and output only.
-- Services coordinate use cases and transactions.
-- Domain models contain business validation and business behavior.
-- Repository interfaces are owned by the module that needs them.
-- Repository implementations and external clients are infrastructure adapters.
-- The report module generates statistics on demand instead of running continuously.
-
-## System Modules
-
-### Attendance Module
-
-The attendance module records attendance for an employee and pushes the recorded data to the existing HR/Payroll system.
-
-The module contains four core classes:
-
-| Class | File | Responsibility |
-| --- | --- | --- |
-| `AttendanceController` | `src/backend/modules/attendance/attendance.controller.ts` | Parses HTTP requests, validates request shape, calls the service, and formats HTTP responses. |
-| `AttendanceService` | `src/backend/modules/attendance/attendance.service.ts` | Orchestrates the attendance use case: create the domain record, check duplicates, persist it, and synchronize it with HR/Payroll. |
-| `AttendanceDomain` | `src/backend/modules/attendance/attendance.domain.ts` | Aggregate root for one attendance record. Validates required fields, date-time order, status values, creates the record ID, and controls synchronization state. |
-| `AttendanceRepository` | `src/backend/modules/attendance/attendance.repository.ts` | Persistence contract used by the service. Concrete implementations live under `infrastructure/persistence`. |
-
-The attendance record flow is:
-
-1. The user submits the attendance form in `AttendanceRecordPage`.
-2. The frontend sends `POST /api/attendance/records`.
-3. `AttendanceController` parses and validates the request body.
-4. `AttendanceService` creates an `AttendanceDomain` record and checks for an existing record for the same employee and work date.
-5. `AttendanceRepository` stores the new record.
-6. `AttendanceService` sends the record to the external HR/Payroll system through the `HRPayrollPort`.
-7. When HR/Payroll accepts the record, the service marks the record as synchronized.
-8. The controller returns the recorded attendance to the frontend.
-
-If the external HR/Payroll call fails, the attendance record remains stored and unsynchronized. The failure is logged so that a retry mechanism can be added without losing the original attendance event. In production, this boundary should be implemented with a transactional outbox and a retry worker.
-
-### Report Module
-
-The report module is activated only when a user accesses the statistics page. It does not run as a background scheduler and it does not precompute reports during attendance recording.
-
-The report flow is:
-
-1. The user opens the Statistics page, which mounts `AttendanceReportPage`.
-2. The page calls `GET /api/reports/attendance` for the selected period.
-3. `ReportController` parses the period and optional department filter.
-4. `ReportService` asks `ReportRepository` for attendance source rows in that period.
-5. `ReportDomain` validates the period and calculates totals, status counts, attendance rate, daily breakdown, and department breakdown.
-6. The controller returns the generated report to the frontend.
-
-The module mirrors the attendance layering:
-
-| Class | File | Responsibility |
-| --- | --- | --- |
-| `ReportController` | `src/backend/modules/report/report.controller.ts` | Parses report query parameters and returns the report response. |
-| `ReportService` | `src/backend/modules/report/report.service.ts` | Loads source rows and invokes report generation on demand. |
-| `ReportDomain` | `src/backend/modules/report/report.domain.ts` | Validates the period and calculates all attendance statistics. |
-| `ReportRepository` | `src/backend/modules/report/report.repository.ts` | Read-model contract for attendance data used by reports. |
-
-The report read model is intentionally separate from the attendance write model. This keeps statistics generation from depending on the internal behavior of the attendance service and allows a future SQL implementation to use optimized reporting queries.
+## Tech Stack
 
 ### Frontend
 
-The frontend only presents data and calls the backend API. It does not duplicate attendance or reporting business rules.
+- React 19
+- TypeScript
+- Vite
+- Ant Design 6
+- React Router
+- SCSS
+- `qrcode.react` for QR code rendering
+- `dayjs` for date handling
 
-- `pages`: top-level screens. `AttendanceRecordPage` records attendance and lists recent records. `AttendanceReportPage` loads statistics when the page is opened.
-- `components`: reusable UI grouped by concern. Attendance components contain the form, record table, and status badge. Report components contain summary cards, the daily trend chart, and the department breakdown table. Layout and common components are shared across pages.
-- `services`: HTTP clients. `api-client.ts` centralizes fetch behavior and error handling, while `attendance.api.ts` and `report.api.ts` expose module-specific API calls.
-- `types`: frontend contracts that match backend DTOs.
-- `utils`: small presentation helpers such as date formatting.
+### Backend
 
-### External HR/Payroll Integration
-
-The external system is represented by the `HRPayrollPort` interface in the attendance module. The service depends on the port, not on a concrete HTTP client. Two adapters are provided:
-
-- `HttpHRPayrollGateway`: sends attendance records to the external system through HTTP. It is used when `HR_PAYROLL_BASE_URL` is configured.
-- `LoggingHRPayrollGateway`: logs the synchronization attempt for local development. It is used when no external URL is configured.
-
-This keeps the external dependency at the infrastructure edge and prevents external API details from leaking into the domain or application service.
-
-### Shared and Infrastructure
-
-- `shared/errors`: application error types with HTTP status codes.
-- `shared/http`: a small HTTP server, request/response contracts, and request body parsing helpers. The current scaffold uses Node's built-in HTTP server so the backend has no framework dependency.
-- `infrastructure/persistence`: in-memory repository implementations and a shared in-memory database for local development.
-- `infrastructure/external/hr-payroll`: adapters for the existing HR/Payroll system.
-
-The composition root in `src/backend/app.ts` wires repositories, services, controllers, routes, and the external HR/Payroll adapter. `src/backend/server.ts` starts the HTTP server.
+- Node.js built-in HTTP server
+- TypeScript
+- PostgreSQL via `pg`
+- `dotenv` for environment variables
 
 ### Database
 
-The `src/database` directory defines the target relational persistence model:
+- PostgreSQL
+- SQL schema and seed data in `src/database/TMC_db.sql`
 
-- `migrations/001_create_attendance_records.sql`: attendance table, uniqueness rule for one record per employee and work date, foreign-key-free employee and department identifiers, synchronization timestamp, and reporting indexes.
-- `seeds/001_attendance_seed.sql`: sample attendance rows across multiple employees, departments, dates, and statuses.
-- `queries/attendance_report.sql`: SQL aggregation for department-level attendance statistics.
+## Software Requirements
 
-The local backend currently uses in-memory repositories. The SQL files document the intended production persistence contract and can be used to replace the in-memory adapters without changing the service or domain layers.
+Install the following software before running the project:
 
-## Source Code Organization
-
-```text
-src/
-├── frontend/
-│   ├── components/
-│   │   ├── attendance/
-│   │   │   ├── AttendanceForm.tsx
-│   │   │   ├── AttendanceRecordTable.tsx
-│   │   │   └── AttendanceStatusBadge.tsx
-│   │   ├── common/
-│   │   │   └── Card.tsx
-│   │   ├── layout/
-│   │   │   └── AppLayout.tsx
-│   │   └── report/
-│   │       ├── AttendanceSummaryCards.tsx
-│   │       ├── AttendanceTrendChart.tsx
-│   │       └── DepartmentBreakdownTable.tsx
-│   ├── pages/
-│   │   ├── attendance/
-│   │   │   └── AttendanceRecordPage.tsx
-│   │   └── report/
-│   │       └── AttendanceReportPage.tsx
-│   ├── services/
-│   │   ├── api-client.ts
-│   │   ├── attendance.api.ts
-│   │   └── report.api.ts
-│   ├── types/
-│   │   ├── attendance.ts
-│   │   ├── navigation.ts
-│   │   └── report.ts
-│   ├── utils/
-│   │   └── date.ts
-│   ├── App.css
-│   ├── App.tsx
-│   ├── index.css
-│   └── main.tsx
-├── backend/
-│   ├── config/
-│   │   └── env.ts
-│   ├── infrastructure/
-│   │   ├── external/
-│   │   │   └── hr-payroll/
-│   │   │       ├── hr-payroll-http.gateway.ts
-│   │   │       └── logging-hr-payroll.gateway.ts
-│   │   └── persistence/
-│   │       ├── in-memory-attendance.repository.ts
-│   │       ├── in-memory-database.ts
-│   │       └── in-memory-report.repository.ts
-│   ├── modules/
-│   │   ├── attendance/
-│   │   │   ├── attendance.controller.ts
-│   │   │   ├── attendance.domain.ts
-│   │   │   ├── attendance.ports.ts
-│   │   │   ├── attendance.repository.ts
-│   │   │   ├── attendance.routes.ts
-│   │   │   ├── attendance.service.ts
-│   │   │   └── attendance.types.ts
-│   │   └── report/
-│   │       ├── report.controller.ts
-│   │       ├── report.domain.ts
-│   │       ├── report.repository.ts
-│   │       ├── report.routes.ts
-│   │       ├── report.service.ts
-│   │       └── report.types.ts
-│   ├── shared/
-│   │   ├── errors/
-│   │   │   └── app-error.ts
-│   │   └── http/
-│   │       ├── http-server.ts
-│   │       ├── http.types.ts
-│   │       └── parsers.ts
-│   ├── app.ts
-│   └── server.ts
-└── database/
-    ├── migrations/
-    │   └── 001_create_attendance_records.sql
-    ├── queries/
-    │   └── attendance_report.sql
-    └── seeds/
-        └── 001_attendance_seed.sql
-```
-
-## API Endpoints
-
-| Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/api/health` | Health check. |
-| `POST` | `/api/attendance/records` | Record attendance and synchronize it with HR/Payroll. |
-| `GET` | `/api/attendance/records` | List attendance records. Supports `employeeId`, `from`, and `to` query parameters. |
-| `GET` | `/api/reports/attendance` | Generate attendance statistics on demand. Supports `from`, `to`, and `departmentId` query parameters. |
-
-Example attendance request:
-
-```json
-{
-  "employeeId": "EMP001",
-  "employeeName": "Alice Nguyen",
-  "departmentId": "DEPT-IT",
-  "workDate": "2026-10-24",
-  "checkInAt": "2026-10-24T08:00:00+07:00",
-  "checkOutAt": "2026-10-24T17:00:00+07:00",
-  "status": "PRESENT",
-  "note": "On time"
-}
-```
-
-## Getting Started
-
-Requirements:
-
-- Node.js 22 or newer.
-- npm.
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Start the backend:
-
-```bash
-npm run dev:backend
-```
-
-The backend listens on `http://localhost:3001` by default.
-
-Start the frontend in a separate terminal:
-
-```bash
-npm run dev
-```
-
-The Vite development server proxies `/api` requests to `http://localhost:3001`.
-
-Build and lint:
-
-```bash
-npm run build
-npm run lint
-```
+- **Node.js 22.18 or newer**
+  - The backend runs TypeScript files directly with Node.js, so a recent Node.js 22 release is required.
+- **npm 10 or newer**
+  - Usually installed together with Node.js.
+- **PostgreSQL**
+  - A local PostgreSQL server is recommended.
+  - `psql` or pgAdmin can be used to create the database and run the SQL file.
+- **A modern web browser**
+  - Chrome, Edge, Firefox, or a similar browser.
 
 ## Environment Variables
 
-| Variable | Used by | Description |
+Create a `.env` file in the project root directory with the following variables:
+
+```env
+PORT=5000
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=TMC_DB
+DB_USER=postgres
+DB_PASSWORD=<your_db_password>
+```
+
+| Variable | Description |
+| --- | --- |
+| `PORT` | HTTP port used by the backend server. The Vite development proxy uses the same port. |
+| `DB_HOST` | PostgreSQL host. |
+| `DB_PORT` | PostgreSQL port. |
+| `DB_NAME` | Database name. |
+| `DB_USER` | PostgreSQL user. |
+| `DB_PASSWORD` | Password of the PostgreSQL user. |
+
+Do not commit the `.env` file to Git. Replace `<your_db_password>` with the password of your local PostgreSQL account.
+
+## Database Setup
+
+### 1. Create the database
+
+Using `psql`:
+
+```powershell
+psql -U postgres -c "CREATE DATABASE \"TMC_DB\";"
+```
+
+Alternatively, create a database named `TMC_DB` with pgAdmin.
+
+### 2. Create the schemas, tables, and seed data
+
+From the project root:
+
+```powershell
+psql -U postgres -d TMC_DB -f src/database/TMC_db.sql
+```
+
+The SQL file creates the following schemas:
+
+- `"user"`
+- `role`
+- `attendance`
+- `report`
+
+It also creates the tables used by the application and inserts demo accounts into `"user".test_account`.
+
+### Seeded Login Accounts
+
+| Username | Password | Role | Redirect |
+| --- | --- | --- | --- |
+| `employee01` | `Employee123!` | `employee` | `/employee/dashboard` |
+| `admin01` | `Admin123!` | `admin` | `/admin/dashboard` |
+| `admin` | `123456` | `employee` | `/employee/dashboard` |
+
+The two demo accounts `employee01` and `admin01` are the accounts used by the demo buttons on the Login page.
+
+## Installation
+
+From the project root:
+
+```powershell
+npm install
+```
+
+## Running the Project
+
+Use two terminals. Both commands must be run from the project root.
+
+### Terminal 1: Start the backend
+
+```powershell
+npm run api
+```
+
+The backend reads configuration from `.env`. With the example configuration, it listens on:
+
+```text
+http://localhost:5000
+```
+
+The backend prints the following messages when it starts successfully:
+
+```text
+Database connection successfully!
+TMC backend listening on http://localhost:5000
+```
+
+### Terminal 2: Start the frontend
+
+```powershell
+npm run dev
+```
+
+Vite starts the frontend development server. The default address is:
+
+```text
+http://localhost:5173
+```
+
+Open that address in a web browser.
+
+The Vite development server proxies requests starting with `/api` to the backend port configured in `.env`. If you change `PORT`, restart both `npm run api` and `npm run dev` so the proxy uses the new port.
+
+## Login Flow
+
+1. The user enters a username and password on `/login`.
+2. The frontend sends a request to `POST /api/auth/login`.
+3. The backend queries `"user".test_account` using parameterized SQL.
+4. If the credentials are valid, the backend returns the account ID, username, and role.
+5. The frontend stores the session in local storage.
+6. The frontend redirects to the dashboard matching the role:
+   - `employee` to `/employee/dashboard`
+   - `admin` to `/admin/dashboard`
+7. If the credentials are invalid, the backend returns `401 INVALID_CREDENTIALS` and the login page displays an error.
+
+## Available Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Starts the Vite frontend development server. |
+| `npm run api` | Starts the backend with Node.js watch mode. |
+| `npm run build` | Type-checks the TypeScript projects and builds the frontend. |
+| `npm run lint` | Runs oxlint on the project. |
+| `npm run preview` | Previews the frontend production build. |
+
+Note: the current working tree does not contain the backend `attendance` and `report` module implementations, but the legacy HR/Payroll adapters still import their types. Because of this, the backend TypeScript step of `npm run build` may fail. The development commands `npm run dev` and `npm run api` are not affected.
+
+## API Endpoints
+
+| Method | Path | Description |
 | --- | --- | --- |
-| `PORT` | Backend | HTTP port. Defaults to `3001`. |
-| `HR_PAYROLL_BASE_URL` | Backend | Base URL of the existing HR/Payroll system. When empty, the logging adapter is used. |
-| `HR_PAYROLL_API_KEY` | Backend | Bearer token sent to the HR/Payroll system. |
-| `VITE_API_BASE_URL` | Frontend | Optional API base URL. Leave empty to use the Vite development proxy. |
+| `GET` | `/api/health` | Health check endpoint. |
+| `POST` | `/api/auth/login` | Validates credentials against `"user".test_account`. |
 
-## Design Rules for Future Changes
+### Login Request
 
-- Keep business rules in domain classes, not in controllers or React components.
-- Add new use cases to services and expose them through controllers and routes.
-- Keep module-to-module access limited to public types or explicit application contracts.
-- Add new external integrations as ports in the owning module and adapters in `infrastructure`.
-- Replace in-memory repositories with SQL repositories before production use.
-- Add authentication, authorization, audit logging, and observability before production use.
-- Replace the direct HR/Payroll synchronization call with a transactional outbox and retry worker when delivery guarantees become critical.
+```http
+POST /api/auth/login
+Content-Type: application/json
+```
+
+```json
+{
+  "username": "employee01",
+  "password": "Employee123!"
+}
+```
+
+### Successful Login Response
+
+```json
+{
+  "data": {
+    "user": {
+      "id": "2",
+      "username": "employee01",
+      "role": "employee"
+    }
+  }
+}
+```
+
+### Invalid Login Response
+
+```json
+{
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Invalid username or password."
+  }
+}
+```
+
+## Project Structure
+
+The tree below reflects the current repository structure, including the administrator Management page and its styles. Generated or local-only directories such as `.git/`, `node_modules/`, and `dist/` are omitted.
+
+```text
+TMC_System/
+├── public/
+│   └── favicon.svg
+├── src/
+│   ├── back/
+│   │   └── package.json
+│   ├── backend/
+│   │   ├── config/
+│   │   │   └── env.ts
+│   │   ├── infrastructure/
+│   │   │   └── external/
+│   │   │       └── hr-payroll/
+│   │   │           ├── hr-payroll-http.gateway.ts
+│   │   │           └── logging-hr-payroll.gateway.ts
+│   │   ├── modules/
+│   │   │   ├── attendance/              # currently empty
+│   │   │   ├── report/                  # currently empty
+│   │   │   ├── role/                    # currently empty
+│   │   │   └── user/
+│   │   │       ├── controller/
+│   │   │       │   └── auth.ts
+│   │   │       ├── domain/
+│   │   │       │   └── auth-user.ts
+│   │   │       ├── repository/
+│   │   │       │   ├── auth.repository.ts
+│   │   │       │   └── postgres-auth.repository.ts
+│   │   │       ├── routes/
+│   │   │       │   └── auth.routes.ts
+│   │   │       └── service/
+│   │   │           └── auth.service.ts
+│   │   ├── shared/
+│   │   │   ├── errors/
+│   │   │   │   └── app-error.ts
+│   │   │   └── http/
+│   │   │       ├── http-server.ts
+│   │   │       ├── http.types.ts
+│   │   │       └── parsers.ts
+│   │   ├── app.ts
+│   │   └── server.ts
+│   ├── database/
+│   │   ├── config.ts
+│   │   └── TMC_db.sql
+│   └── frontend/
+│       ├── components/
+│       │   ├── attendance/
+│       │   │   └── AttendanceTable.tsx
+│       │   ├── common/
+│       │   │   ├── AttendanceStatusTag.tsx
+│       │   │   ├── BrandLogo.tsx
+│       │   │   ├── ConfirmModal.tsx
+│       │   │   ├── EmptyState.tsx
+│       │   │   ├── PageLoading.tsx
+│       │   │   ├── QRCodeModal.tsx
+│       │   │   └── StatCard.tsx
+│       │   ├── dashboard/
+│       │   │   └── AttendanceTrendChart.tsx
+│       │   ├── layout/
+│       │   │   ├── AppHeader.tsx
+│       │   │   ├── AppLayout.tsx
+│       │   │   ├── AuthLayout.tsx
+│       │   │   ├── BreadcrumbHeader.tsx
+│       │   │   ├── Sidebar.tsx
+│       │   │   └── UserAvatarDropdown.tsx
+│       │   └── profile/
+│       │       ├── EditProfileModal.tsx
+│       │       └── ProfileCard.tsx
+│       ├── context/
+│       │   ├── AuthContext.tsx
+│       │   └── authContextValue.ts
+│       ├── hooks/
+│       │   ├── useAuth.ts
+│       │   └── useClock.ts
+│       ├── layouts/
+│       │   ├── AdminLayout.tsx
+│       │   └── EmployeeLayout.tsx
+│       ├── mocks/
+│       │   ├── attendance.ts
+│       │   ├── statistics.ts
+│       │   └── users.ts
+│       ├── pages/
+│       │   ├── admin/
+│       │   │   ├── AdminDashboardPage.tsx
+│       │   │   ├── AdminProfilePage.tsx
+│       │   │   ├── AttendanceStatisticsPage.tsx
+│       │   │   └── ManagementPage.tsx       # /admin/management
+│       │   ├── auth/
+│       │   │   ├── ForgotPasswordPage.tsx
+│       │   │   ├── LoginPage.tsx
+│       │   │   └── SignUpPage.tsx
+│       │   ├── employee/
+│       │   │   ├── EmployeeDashboardPage.tsx
+│       │   │   └── EmployeeProfilePage.tsx
+│       │   ├── kiosk/
+│       │   │   └── KioskPage.tsx
+│       │   └── NotFoundPage.tsx
+│       ├── routes/
+│       │   ├── AppRoutes.tsx
+│       │   └── ProtectedRoute.tsx
+│       ├── services/
+│       │   └── auth.api.ts
+│       ├── styles/
+│       │   ├── abstracts/
+│       │   │   ├── _mixins.scss
+│       │   │   └── _variables.scss
+│       │   ├── base/
+│       │   │   ├── _antd-overrides.scss
+│       │   │   ├── _reset.scss
+│       │   │   └── _typography.scss
+│       │   ├── components/
+│       │   │   ├── _attendance.scss
+│       │   │   ├── _auth.scss
+│       │   │   ├── _common.scss
+│       │   │   ├── _dashboard.scss
+│       │   │   ├── _kiosk.scss
+│       │   │   ├── _management.scss
+│       │   │   ├── _profile.scss
+│       │   │   └── _statistics.scss
+│       │   ├── layouts/
+│       │   │   ├── _app-layout.scss
+│       │   │   └── _auth-layout.scss
+│       │   └── main.scss
+│       ├── types/
+│       │   ├── attendance.ts
+│       │   ├── auth.ts
+│       │   └── navigation.ts
+│       ├── utils/
+│       │   ├── async.ts
+│       │   ├── attendance.ts
+│       │   ├── csv.ts
+│       │   ├── date.ts
+│       │   └── user.ts
+│       ├── App.tsx
+│       ├── main.tsx
+│       └── theme.ts
+├── .env
+├── .gitignore
+├── .oxlintrc.json
+├── Implements.md
+├── README.md
+├── UI_plan.md
+├── UI_requirements.md
+├── index.html
+├── package-lock.json
+├── package.json
+├── tsconfig.app.json
+├── tsconfig.backend.json
+├── tsconfig.json
+├── tsconfig.node.json
+└── vite.config.ts
+```
+
+## Application Structure
+
+### Backend
+
+The backend is organized by modules. The user module contains the authentication flow:
+
+- `controller/auth.ts` parses HTTP requests and formats responses.
+- `service/auth.service.ts` implements the login use case and role resolution.
+- `domain/auth-user.ts` defines authentication user types and role mapping.
+- `repository/auth.repository.ts` defines the persistence contract.
+- `repository/postgres-auth.repository.ts` implements the SQL query against `"user".test_account`.
+- `routes/auth.routes.ts` registers the login endpoint.
+- `app.ts` is the composition root that wires the repository, service, controller, and routes.
+- `shared/http` contains the small HTTP server and request parsing helpers.
+- `shared/errors` contains application errors with HTTP status codes.
+
+### Frontend
+
+- `pages/` contains the screens for authentication, employees, administrators, and the kiosk.
+- `pages/admin/ManagementPage.tsx` provides employee account management with view, update, and delete modals.
+- `components/` contains reusable layout, table, form, dashboard, and modal components.
+- `context/AuthContext.tsx` manages the current user session and calls the login API.
+- `services/auth.api.ts` sends login requests to the backend.
+- `routes/` contains route definitions and role-based route protection.
+- `mocks/` contains local attendance, statistics, and user data used by the current UI.
+- `styles/` contains all SCSS styling.
+- `types/` contains shared frontend TypeScript types.
+- `utils/` contains date, CSV, attendance, and user presentation helpers.
+
+### Database
+
+- `src/database/config.ts` creates the PostgreSQL connection pool and loads `.env`.
+- `src/database/TMC_db.sql` contains the schema, tables, and seed accounts.
+
+## Authentication Notes
+
+- Login credentials are verified against `"user".test_account`.
+- Passwords are currently stored as plain text in the demo table.
+- No JWT or server-side session is used.
+- The frontend keeps the logged-in user in local storage for routing and page state.
+- This authentication implementation is intended for coursework and demonstration purposes, not production use.

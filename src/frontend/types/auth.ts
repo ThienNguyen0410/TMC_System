@@ -45,4 +45,5 @@ export interface ProfileUpdateInput {
   email: string
   phone: string
   dateOfBirth: string
+  department?: string
 }

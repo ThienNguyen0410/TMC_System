@@ -10,10 +10,11 @@ import type {
 export interface AuthContextValue {
   currentUser: AppUser | null
   users: AppUser[]
-  login: (username: string, password: string) => LoginResult
+  login: (username: string, password: string) => Promise<LoginResult>
   signOut: () => void
   register: (input: RegisterInput) => RegisterResult
   updateProfile: (userId: string, input: ProfileUpdateInput) => AppUser | null
+  deleteUser: (userId: string) => boolean
   isEmailRegistered: (email: string) => boolean
 }
 

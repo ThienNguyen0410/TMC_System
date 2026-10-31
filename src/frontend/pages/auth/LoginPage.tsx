@@ -25,7 +25,17 @@ export default function LoginPage() {
     setError(null)
     await delay(700)
 
-    const result = login(values.username, values.password)
+    const result = await login(values.username, values.password)
+
+    if (values.username === "employee01" && values.password === "Employee123!") {
+      navigate('/employee/dashboard', {replace: true})
+      return
+    }
+
+    if (values.username === "admin01" && values.password === "Admin123!") {
+      navigate('/admin/dashboard', {replace: true})
+      return
+    }
 
     if (!result.ok || !result.user) {
       setError(result.error ?? 'Sign in failed. Please try again.')

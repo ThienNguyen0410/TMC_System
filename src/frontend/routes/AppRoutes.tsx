@@ -15,6 +15,7 @@ const EmployeeProfilePage = lazy(() => import('../pages/employee/EmployeeProfile
 const AdminDashboardPage = lazy(() => import('../pages/admin/AdminDashboardPage'))
 const AdminProfilePage = lazy(() => import('../pages/admin/AdminProfilePage'))
 const AttendanceStatisticsPage = lazy(() => import('../pages/admin/AttendanceStatisticsPage'))
+const ManagementPage = lazy(() => import('../pages/admin/ManagementPage'))
 const NotFoundPage = lazy(() => import('../pages/NotFoundPage'))
 
 function HomeRedirect() {
@@ -65,6 +66,7 @@ export function AppRoutes() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboardPage />} />
+          <Route path="management" element={<ManagementPage />} />
           <Route path="statistics" element={<AttendanceStatisticsPage />} />
           <Route path="profile" element={<AdminProfilePage />} />
         </Route>

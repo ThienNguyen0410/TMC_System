@@ -5,7 +5,7 @@ import {
   PhoneOutlined,
   UserAddOutlined,
 } from '@ant-design/icons'
-import { Alert, App as AntdApp, Button, DatePicker, Form, Input, Modal, Result } from 'antd'
+import { Alert, App as AntdApp, Button, DatePicker, Form, Input, Modal, Result, Select } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { QRCodeCanvas } from 'qrcode.react'
 import { useState } from 'react'
@@ -74,7 +74,7 @@ export default function SignUpPage() {
     <AuthLayout
       wide
       title="Create your employee account"
-      subtitle="Your personal attendance QR code is generated automatically once your account is created."
+      subtitle=''
       footer={
         <span>
           Already have an account? <Link to="/login">Sign in</Link>
@@ -137,6 +137,24 @@ export default function SignUpPage() {
             <Input size="large" prefix={<PhoneOutlined />} placeholder="0901234567" />
           </Form.Item>
         </div>
+
+        <Form.Item
+        label="Role"
+        >
+          <Select
+          defaultValue={'employee'}
+          options={[
+            {value: "employee", label: "Employee"},
+            {value: "admin", label: "Admin"},
+            {value: "hr", label: "HR"},
+            {value: "PS", label: "Production Supervisor"},
+            {value: "security-guard", label: "Security Guard"},
+            {value: "executive managemen", label: "Executive Management"}
+
+          ]}
+          ></Select>
+        </Form.Item>
+
         <Form.Item
           label="Email"
           name="email"

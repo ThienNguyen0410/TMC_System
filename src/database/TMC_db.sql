@@ -5,24 +5,36 @@
 
 CREATE SCHEMA IF NOT EXISTS "user";
 
-CREATE TABLE IF NOT EXISTS "user".employees (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    employee_code VARCHAR(50) NOT NULL UNIQUE,
-    full_name VARCHAR(150) NOT NULL,
-    department VARCHAR(100),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS "user".test_account (
+	id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+	username VARCHAR(50),
+	pass_word VARCHAR(50)
 );
 
-CREATE TABLE IF NOT EXISTS "user".accounts (
+INSERT INTO "user".test_account (username, pass_word)
+SELECT 'admin', '123456'
+WHERE NOT EXISTS (SELECT 1 FROM "user".test_account WHERE username = 'admin');
+
+INSERT INTO "user".test_account (username, pass_word)
+SELECT 'employee01', 'Employee123!'
+WHERE NOT EXISTS (SELECT 1 FROM "user".test_account WHERE username = 'employee01');
+
+INSERT INTO "user".test_account (username, pass_word)
+SELECT 'admin01', 'Admin123!'
+WHERE NOT EXISTS (SELECT 1 FROM "user".test_account WHERE username = 'admin01');
+
+CREATE TABLE "user".users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    employee_id BIGINT UNIQUE
-        REFERENCES "user".employees(id),
+    full_name VARCHAR(150) NOT NULL,
+    department VARCHAR(100),
+    phone_number VARCHAR(15),
+    email VARCHAR(100),
+    date_of_birth DATE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
 
 -- =========================================
 -- 2. ROLE SCHEMA
@@ -42,9 +54,10 @@ CREATE TABLE IF NOT EXISTS "role".permissions (
     description TEXT
 );
 
+
 CREATE TABLE IF NOT EXISTS "role".account_roles (
     account_id BIGINT NOT NULL
-        REFERENCES "user".accounts(id) ON DELETE CASCADE,
+        REFERENCES "user".users(id) ON DELETE CASCADE,
     role_id BIGINT NOT NULL
         REFERENCES "role".roles(id) ON DELETE CASCADE,
     PRIMARY KEY (account_id, role_id)
@@ -112,6 +125,19 @@ CREATE TABLE IF NOT EXISTS report.report_definitions (
     name VARCHAR(100) NOT NULL,
     description TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS report.report_generations (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    report_definition_id BIGINT NOT NULL
+        REFERENCES report.report_definitions(id),
+    generated_by BIGINT NOT NULL
+        REFERENCES "user".users(id),
+    start_date DATE,
+    end_date DATE,
+    file_path TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 

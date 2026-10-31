@@ -21,3 +21,9 @@ export class ConflictError extends AppError {
     super(message, 409, 'CONFLICT')
   }
 }
+
+export class AuthenticationError extends AppError {
+  constructor(message = 'Invalid username or password.') {
+    super(message, 401, 'INVALID_CREDENTIALS')
+  }
+}
