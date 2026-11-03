@@ -1,7 +1,18 @@
-import type { Request, Response } from 'express'
+import type { CookieOptions, Request, Response } from 'express'
+import { env } from '../../../config/env.ts'
 import { ValidationError } from '../../../shared/errors/app-error.ts'
-import type { AuthService } from '../service/auth.service.ts'
+import type { AuthService, AuthSession } from '../service/auth.service.ts'
 import { loginSchema, registerSchema } from './auth.schema.ts'
+
+const REFRESH_COOKIE = 'refresh_token'
+const REFRESH_COOKIE_PATH = '/api/auth'
+
+const refreshCookieOptions: CookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: env.cookieSecure,
+  path: REFRESH_COOKIE_PATH,
+}
 
 export class AuthController {
   private readonly authService: AuthService
@@ -17,11 +28,13 @@ export class AuthController {
       throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid credentials')
     }
 
-    const user = await this.authService.login(parsed.data.username, parsed.data.password)
+    const session = await this.authService.login(parsed.data.username, parsed.data.password)
+    this.setRefreshCookie(response, session)
 
     response.status(200).json({
       data: {
-        user,
+        user: session.user,
+        accessToken: session.accessToken,
       },
     })
   }
@@ -39,6 +52,45 @@ export class AuthController {
       data: {
         user,
       },
+    })
+  }
+
+  async refresh(request: Request, response: Response): Promise<void> {
+    const session = await this.authService.refresh(this.readRefreshToken(request))
+    this.setRefreshCookie(response, session)
+
+    response.status(200).json({
+      data: {
+        user: session.user,
+        accessToken: session.accessToken,
+      },
+    })
+  }
+
+  async logout(request: Request, response: Response): Promise<void> {
+    await this.authService.logout(this.readRefreshToken(request))
+
+    response.clearCookie(REFRESH_COOKIE, refreshCookieOptions)
+    response.status(204).end()
+  }
+
+  async me(_request: Request, response: Response): Promise<void> {
+    response.status(200).json({
+      data: {
+        user: response.locals.user,
+      },
+    })
+  }
+
+  private readRefreshToken(request: Request): string | undefined {
+    const token = request.cookies?.[REFRESH_COOKIE]
+    return typeof token === 'string' ? token : undefined
+  }
+
+  private setRefreshCookie(response: Response, session: AuthSession): void {
+    response.cookie(REFRESH_COOKIE, session.refreshToken, {
+      ...refreshCookieOptions,
+      maxAge: session.refreshExpiresAt.getTime() - Date.now(),
     })
   }
 }

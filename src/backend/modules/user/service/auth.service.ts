@@ -1,46 +1,100 @@
-import { randomBytes, scrypt } from 'node:crypto'
 import { AuthenticationError } from '../../../shared/errors/app-error.ts'
-import { resolveUserRole, type AuthUser, type RegisterInput } from '../domain/auth-user.ts'
-import type { AuthRepository } from '../repository/auth.repository.ts'
+import { hashPassword, verifyPassword } from '../../../shared/security/password.ts'
+import {
+  createRefreshToken,
+  hashToken,
+  signAccessToken,
+  verifyAccessToken,
+} from '../../../shared/security/tokens.ts'
+import type { AuthUser, RegisterInput } from '../domain/auth-user.ts'
+import type { AuthRepository, NewRefreshToken } from '../repository/auth.repository.ts'
 
-const SCRYPT_N = 16384
-const SCRYPT_R = 8
-const SCRYPT_P = 1
+export interface AuthServiceConfig {
+  accessTokenSecret: string
+  accessTokenTtlSeconds: number
+  refreshTokenTtlDays: number
+}
 
-const hashPassword = (password: string): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const salt = randomBytes(16)
-
-    scrypt(password, salt, 64, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P }, (error, key) => {
-      if (error) {
-        reject(error)
-        return
-      }
-
-      resolve(
-        `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('base64')}$${key.toString('base64')}`,
-      )
-    })
-  })
+export interface AuthSession {
+  user: AuthUser
+  accessToken: string
+  refreshToken: string
+  refreshExpiresAt: Date
+}
 
 export class AuthService {
   private readonly authRepository: AuthRepository
+  private readonly config: AuthServiceConfig
 
-  constructor(authRepository: AuthRepository) {
+  constructor(authRepository: AuthRepository, config: AuthServiceConfig) {
     this.authRepository = authRepository
+    this.config = config
   }
 
-  async login(username: string, password: string): Promise<AuthUser> {
-    const account = await this.authRepository.findByCredentials(username, password)
+  async login(username: string, password: string): Promise<AuthSession> {
+    const normalizedUsername = username.trim().toLowerCase()
+    const account = await this.authRepository.findByUsername(normalizedUsername)
 
-    if (!account) {
+    if (!account || !account.isActive || !(await verifyPassword(password, account.passwordHash))) {
       throw new AuthenticationError()
     }
 
-    return {
-      ...account,
-      role: resolveUserRole(account.username),
+    return this.createSession({
+      id: account.id,
+      username: account.username,
+      role: account.role,
+    })
+  }
+
+  async refresh(rawToken: string | undefined): Promise<AuthSession> {
+    if (!rawToken) {
+      throw new AuthenticationError('Refresh token is required.')
     }
+
+    const record = await this.authRepository.findRefreshToken(hashToken(rawToken))
+
+    if (!record || record.revokedAt || record.expiresAt.getTime() <= Date.now()) {
+      throw new AuthenticationError('Invalid or expired refresh token.')
+    }
+
+    const user = await this.authRepository.findUserById(record.userId)
+
+    if (!user) {
+      throw new AuthenticationError('Invalid or expired refresh token.')
+    }
+
+    const next = this.newRefreshToken(record.userId)
+
+    if (!(await this.authRepository.rotateRefreshToken(record.id, next.record))) {
+      throw new AuthenticationError('Invalid or expired refresh token.')
+    }
+
+    return {
+      user,
+      accessToken: await this.issueAccessToken(user),
+      refreshToken: next.token,
+      refreshExpiresAt: next.record.expiresAt,
+    }
+  }
+
+  async logout(rawToken: string | undefined): Promise<void> {
+    if (rawToken) {
+      await this.authRepository.revokeRefreshToken(hashToken(rawToken))
+    }
+  }
+
+  async authenticateAccessToken(rawToken: string | undefined): Promise<AuthUser | null> {
+    if (!rawToken) {
+      return null
+    }
+
+    const tokenUser = await verifyAccessToken(rawToken, this.config.accessTokenSecret)
+
+    if (!tokenUser) {
+      return null
+    }
+
+    return this.authRepository.findUserById(tokenUser.id)
   }
 
   async register(input: RegisterInput): Promise<AuthUser> {
@@ -51,5 +105,30 @@ export class AuthService {
       ...account,
       role: 'employee',
     }
+  }
+
+  private async createSession(user: AuthUser): Promise<AuthSession> {
+    const next = this.newRefreshToken(user.id)
+    await this.authRepository.createRefreshToken(next.record)
+
+    return {
+      user,
+      accessToken: await this.issueAccessToken(user),
+      refreshToken: next.token,
+      refreshExpiresAt: next.record.expiresAt,
+    }
+  }
+
+  private newRefreshToken(userId: string): { token: string; record: NewRefreshToken } {
+    const { token, hash } = createRefreshToken()
+    const expiresAt = new Date(
+      Date.now() + this.config.refreshTokenTtlDays * 24 * 60 * 60 * 1000,
+    )
+
+    return { token, record: { userId, tokenHash: hash, expiresAt } }
+  }
+
+  private issueAccessToken(user: AuthUser): Promise<string> {
+    return signAccessToken(user, this.config.accessTokenSecret, this.config.accessTokenTtlSeconds)
   }
 }

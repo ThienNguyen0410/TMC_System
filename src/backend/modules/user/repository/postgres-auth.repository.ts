@@ -1,12 +1,50 @@
 import type { Pool } from 'pg'
 import { ConflictError } from '../../../shared/errors/app-error.ts'
-import type { AuthAccount } from '../domain/auth-user.ts'
-import type { AuthRepository, NewAccount } from './auth.repository.ts'
+import type { AuthAccount, AuthUser, UserRole } from '../domain/auth-user.ts'
+import type {
+  AuthCredentials,
+  AuthRepository,
+  NewAccount,
+  NewRefreshToken,
+  RefreshTokenRecord,
+} from './auth.repository.ts'
 
 interface AccountRow {
   id: string
   username: string
 }
+
+interface CredentialsRow extends AccountRow {
+  passwordHash: string
+  role: string
+  isActive: boolean
+}
+
+interface UserRow extends AccountRow {
+  role: string
+}
+
+interface RefreshTokenRow {
+  id: string
+  userId: string
+  expiresAt: Date
+  revokedAt: Date | null
+}
+
+const toRole = (role: string): UserRole => (role === 'admin' ? 'admin' : 'employee')
+
+const userSelect = `
+  SELECT u.id::text AS id, u.username, coalesce(r.name, 'employee') AS role
+  FROM "user".users u
+  LEFT JOIN LATERAL (
+    SELECT roles.name
+    FROM role.account_roles ar
+    JOIN role.roles roles ON roles.id = ar.role_id
+    WHERE ar.account_id = u.id
+    ORDER BY roles.name
+    LIMIT 1
+  ) r ON TRUE
+`
 
 export class PostgresAuthRepository implements AuthRepository {
   private readonly pool: Pool
@@ -15,17 +53,44 @@ export class PostgresAuthRepository implements AuthRepository {
     this.pool = pool
   }
 
-  async findByCredentials(username: string, password: string): Promise<AuthAccount | null> {
-    const result = await this.pool.query<AccountRow>(
-      `SELECT id::text AS id, username
-       FROM "user".test_account
-       WHERE username = $1 AND pass_word = $2
+  async findByUsername(username: string): Promise<AuthCredentials | null> {
+    const result = await this.pool.query<CredentialsRow>(
+      `SELECT u.id::text AS id, u.username, u.password_hash AS "passwordHash",
+              u.is_active AS "isActive", coalesce(r.name, 'employee') AS role
+       FROM "user".users u
+       LEFT JOIN LATERAL (
+         SELECT roles.name
+         FROM role.account_roles ar
+         JOIN role.roles roles ON roles.id = ar.role_id
+         WHERE ar.account_id = u.id
+         ORDER BY roles.name
+         LIMIT 1
+       ) r ON TRUE
+       WHERE u.username = $1
        LIMIT 1`,
-      [username, password],
+      [username],
     )
 
     const row = result.rows[0]
-    return row ? { id: row.id, username: row.username } : null
+    return row
+      ? {
+          id: row.id,
+          username: row.username,
+          passwordHash: row.passwordHash,
+          role: toRole(row.role),
+          isActive: row.isActive,
+        }
+      : null
+  }
+
+  async findUserById(id: string): Promise<AuthUser | null> {
+    const result = await this.pool.query<UserRow>(
+      `${userSelect} WHERE u.id = $1 AND u.is_active = TRUE LIMIT 1`,
+      [id],
+    )
+    const row = result.rows[0]
+
+    return row ? { id: row.id, username: row.username, role: toRole(row.role) } : null
   }
 
   async createAccount(account: NewAccount): Promise<AuthAccount> {
@@ -61,5 +126,57 @@ export class PostgresAuthRepository implements AuthRepository {
 
       throw error
     }
+  }
+
+  async createRefreshToken(token: NewRefreshToken): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO "user".refresh_tokens (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [token.userId, token.tokenHash, token.expiresAt],
+    )
+  }
+
+  async findRefreshToken(tokenHash: string): Promise<RefreshTokenRecord | null> {
+    const result = await this.pool.query<RefreshTokenRow>(
+      `SELECT id::text AS id, user_id::text AS "userId",
+              expires_at AS "expiresAt", revoked_at AS "revokedAt"
+       FROM "user".refresh_tokens
+       WHERE token_hash = $1
+       LIMIT 1`,
+      [tokenHash],
+    )
+
+    return result.rows[0] ?? null
+  }
+
+  async rotateRefreshToken(currentId: string, next: NewRefreshToken): Promise<boolean> {
+    const result = await this.pool.query(
+      `WITH current AS (
+         UPDATE "user".refresh_tokens
+         SET revoked_at = NOW()
+         WHERE id = $1 AND revoked_at IS NULL AND expires_at > NOW()
+         RETURNING id, user_id
+       ), created AS (
+         INSERT INTO "user".refresh_tokens (user_id, token_hash, expires_at)
+         SELECT user_id, $2, $3 FROM current
+         RETURNING id
+       )
+       UPDATE "user".refresh_tokens
+       SET replaced_by_id = (SELECT id FROM created)
+       WHERE id = (SELECT id FROM current)
+       RETURNING id`,
+      [currentId, next.tokenHash, next.expiresAt],
+    )
+
+    return result.rowCount === 1
+  }
+
+  async revokeRefreshToken(tokenHash: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE "user".refresh_tokens
+       SET revoked_at = NOW()
+       WHERE token_hash = $1 AND revoked_at IS NULL`,
+      [tokenHash],
+    )
   }
 }

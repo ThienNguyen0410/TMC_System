@@ -17,12 +17,3 @@ export interface RegisterInput {
   phone: string
   dateOfBirth: string
 }
-
-const roleByUsername: Record<string, UserRole> = {
-  employee01: 'employee',
-  admin01: 'admin',
-}
-
-export function resolveUserRole(username: string): UserRole {
-  return roleByUsername[username.trim().toLowerCase()] ?? 'employee'
-}
