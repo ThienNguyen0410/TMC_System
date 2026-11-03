@@ -1,8 +1,7 @@
+import type { Request, Response } from 'express'
 import { ValidationError } from '../../../shared/errors/app-error.ts'
-import type { HttpRequest, HttpResponse } from '../../../shared/http/http.types.ts'
-import { asObject, readRequiredString } from '../../../shared/http/parsers.ts'
 import type { AuthService } from '../service/auth.service.ts'
-import { registerSchema } from './auth.schema.ts'
+import { loginSchema, registerSchema } from './auth.schema.ts'
 
 export class AuthController {
   private readonly authService: AuthService
@@ -11,45 +10,35 @@ export class AuthController {
     this.authService = authService
   }
 
-  async login(request: HttpRequest): Promise<HttpResponse> {
-    const body = asObject(request.body)
-    const username = readRequiredString(body, 'username')
-    const password = body.password
+  async login(request: Request, response: Response): Promise<void> {
+    const parsed = loginSchema.safeParse(request.body)
 
-    if (typeof password !== 'string' || password.length === 0) {
-      throw new ValidationError('password is required')
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid credentials')
     }
 
-    const user = await this.authService.login(username, password)
+    const user = await this.authService.login(parsed.data.username, parsed.data.password)
 
-    return {
-      status: 200,
-      body: {
-        data: {
-          user,
-        },
+    response.status(200).json({
+      data: {
+        user,
       },
-    }
+    })
   }
 
-  async register(request: HttpRequest): Promise<HttpResponse> {
+  async register(request: Request, response: Response): Promise<void> {
     const parsed = registerSchema.safeParse(request.body)
 
     if (!parsed.success) {
-      throw new ValidationError(
-        parsed.error.issues[0]?.message ?? 'Invalid registration details',
-      )
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid registration details')
     }
 
     const user = await this.authService.register(parsed.data)
 
-    return {
-      status: 201,
-      body: {
-        data: {
-          user,
-        },
+    response.status(201).json({
+      data: {
+        user,
       },
-    }
+    })
   }
 }

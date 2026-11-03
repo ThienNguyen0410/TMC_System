@@ -1,15 +1,11 @@
-import type { Route } from '../../../shared/http/http.types.ts'
+import { Router } from 'express'
 import type { AuthController } from '../controller/auth.ts'
 
-export const createAuthRoutes = (controller: AuthController): Route[] => [
-  {
-    method: 'POST',
-    path: '/api/auth/login',
-    handler: (request) => controller.login(request),
-  },
-  {
-    method: 'POST',
-    path: '/api/auth/register',
-    handler: (request) => controller.register(request),
-  },
-]
+export const createAuthRouter = (controller: AuthController): Router => {
+  const router = Router()
+
+  router.post('/login', (request, response) => controller.login(request, response))
+  router.post('/register', (request, response) => controller.register(request, response))
+
+  return router
+}

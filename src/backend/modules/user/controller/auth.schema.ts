@@ -2,6 +2,14 @@ import { z } from 'zod'
 
 const passwordPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
 
+export const loginSchema = z.object({
+  username: z
+    .string({ error: 'username is required' })
+    .trim()
+    .min(1, 'username is required'),
+  password: z.string({ error: 'password is required' }).min(1, 'password is required'),
+})
+
 export const registerSchema = z.object({
   fullName: z
     .string({ error: 'Full name is required.' })

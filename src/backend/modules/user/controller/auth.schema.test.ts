@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { registerSchema } from './auth.schema.ts'
+import { loginSchema, registerSchema } from './auth.schema.ts'
 
 const validInput = {
   fullName: '  Nguyen Van An  ',
@@ -41,5 +41,26 @@ test('rejects invalid registration fields', () => {
 
   for (const input of invalidInputs) {
     assert.equal(registerSchema.safeParse(input).success, false, JSON.stringify(input))
+  }
+})
+
+test('accepts a valid login and trims the username', () => {
+  const result = loginSchema.safeParse({ username: '  admin ', password: '123456' })
+
+  assert.ok(result.success)
+  assert.equal(result.data.username, 'admin')
+  assert.equal(result.data.password, '123456')
+})
+
+test('rejects missing or blank login credentials', () => {
+  const invalidInputs = [
+    { password: '123456' },
+    { username: 'admin' },
+    { username: '   ', password: '123456' },
+    { username: 'admin', password: '' },
+  ]
+
+  for (const input of invalidInputs) {
+    assert.equal(loginSchema.safeParse(input).success, false, JSON.stringify(input))
   }
 })
