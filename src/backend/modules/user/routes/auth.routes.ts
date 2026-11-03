@@ -7,4 +7,9 @@ export const createAuthRoutes = (controller: AuthController): Route[] => [
     path: '/api/auth/login',
     handler: (request) => controller.login(request),
   },
+  {
+    method: 'POST',
+    path: '/api/auth/register',
+    handler: (request) => controller.register(request),
+  },
 ]

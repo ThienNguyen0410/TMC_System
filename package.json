@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "api": "node --watch src/backend/server.ts",
+    "api": "node --watch --experimental-strip-types src/backend/server.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --experimental-strip-types --test \"src/backend/**/*.test.ts\"",
     "preview": "vite preview",
     "db:migrate": "node-pg-migrate -m src/database/migrations --envPath .env up",
     "db:rollback": "node-pg-migrate -m src/database/migrations --envPath .env down",
