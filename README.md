@@ -71,32 +71,32 @@ Do not commit the `.env` file to Git. Replace `<your_db_password>` with the pass
 
 ## Database Setup
 
-### 1. Create the database
+PostgreSQL runs in Docker; nothing needs to be installed locally.
 
-Using `psql`:
+### 1. Configure the environment
 
-```powershell
-psql -U postgres -c "CREATE DATABASE \"TMC_DB\";"
-```
+Copy `.env.example` to `.env` and set `DB_PASSWORD`. The defaults already match the Compose setup (`DB_PORT=5432`, `DB_NAME=TMC_DB`, `DB_USER=postgres`).
 
-Alternatively, create a database named `TMC_DB` with pgAdmin.
-
-### 2. Create the schemas, tables, and seed data
+### 2. Start the database and create the schema
 
 From the project root:
 
-```powershell
-psql -U postgres -d TMC_DB -f src/database/TMC_db.sql
+```bash
+npm run db:up        # docker compose up -d --wait db
+npm run db:migrate   # applies src/database/migrations
 ```
 
-The SQL file creates the following schemas:
+The migrations create the schemas `"user"`, `role`, `attendance`, `report`, the tables used by the application, and the demo accounts.
 
-- `"user"`
-- `role`
-- `attendance`
-- `report`
+Useful commands:
 
-It also creates the tables used by the application and inserts demo accounts into `"user".test_account`.
+| Command | Effect |
+| --- | --- |
+| `npm run db:down` | Stops the container, keeps the data volume. |
+| `npm run db:reset` | **Destroys all data**, recreates the container, and migrates. |
+| `npm run db:new -- <name>` | Creates the next migration file. |
+
+`src/database/TMC_db.sql` is a historical snapshot; do not run it manually — migration `0001_baseline.sql` reproduces it.
 
 ### Seeded Login Accounts
 
