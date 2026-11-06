@@ -31,11 +31,13 @@ const readBody = async (request: IncomingMessage): Promise<unknown> => {
   }
 }
 
-const writeJson = (response: ServerResponse, status: number, body: unknown): void => {
-  const payload = JSON.stringify(body)
-  response.writeHead(status, {
+const writeResponse = (response: ServerResponse, result: HttpResponse): void => {
+  const isRaw = typeof result.body === 'string'
+  const payload = isRaw ? (result.body as string) : JSON.stringify(result.body)
+  response.writeHead(result.status, {
     ...CORS_HEADERS,
-    'Content-Type': 'application/json; charset=utf-8',
+    ...(isRaw ? {} : { 'Content-Type': 'application/json; charset=utf-8' }),
+    ...result.headers,
     'Content-Length': Buffer.byteLength(payload),
   })
   response.end(payload)
@@ -80,10 +82,13 @@ export const createHttpServer = (routes: Route[]): Server =>
     )
 
     if (!route) {
-      writeJson(response, 404, {
-        error: {
-          code: 'NOT_FOUND',
-          message: `No route for ${request.method ?? 'UNKNOWN'} ${url.pathname}`,
+      writeResponse(response, {
+        status: 404,
+        body: {
+          error: {
+            code: 'NOT_FOUND',
+            message: `No route for ${request.method ?? 'UNKNOWN'} ${url.pathname}`,
+          },
         },
       })
       return
@@ -98,10 +103,8 @@ export const createHttpServer = (routes: Route[]): Server =>
         headers: request.headers,
         body,
       }
-      const result = await route.handler(httpRequest)
-      writeJson(response, result.status, result.body)
+      writeResponse(response, await route.handler(httpRequest))
     } catch (error) {
-      const result = toErrorResponse(error)
-      writeJson(response, result.status, result.body)
+      writeResponse(response, toErrorResponse(error))
     }
   })
