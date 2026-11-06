@@ -48,7 +48,7 @@ export function classifyAttendance(
   if (checkIn === null && checkOut === null) {
     return 'absent'
   }
-  if (checkIn === null || checkOut === null) {
+  if (checkIn === null || checkOut === null || checkOut < checkIn) {
     return 'incomplete'
   }
   return checkIn > lateAfter ? 'late' : 'present'

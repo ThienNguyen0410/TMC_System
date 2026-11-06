@@ -116,6 +116,25 @@ test('applies the status filter after status is derived', async () => {
   )
 })
 
+test('skips past weekends, not only future ones', async () => {
+  const rows = await serviceWith([A]).getRows({ startDate: '2026-10-31', endDate: '2026-11-02' })
+
+  assert.deepEqual(
+    rows.map((row) => row.date),
+    ['2026-11-02'],
+  )
+})
+
+test('uses the injected lateAfter cutoff', async () => {
+  const service = new AttendanceReportService(
+    new InMemoryAttendanceReportRepository([A], [day('1', '2026-11-02', '08:30:00', '17:00:00')]),
+    '08:00:00',
+    () => TODAY,
+  )
+
+  assert.equal((await service.getRows(oneDay('2026-11-02')))[0].status, 'late')
+})
+
 test('returns an empty array when nothing matches', async () => {
   const rows = await serviceWith([A, B]).getRows({
     startDate: '2026-11-07',
@@ -128,20 +147,25 @@ test('returns an empty array when nothing matches', async () => {
 test('sorts by date, then full name, then employee id', async () => {
   const twin9 = employee('9', 'Same Name')
   const twin10 = employee('10', 'Same Name')
-  const rows = await serviceWith(
-    [twin10, twin9, A],
-    [day('9', '2026-11-03', '08:00:00', '17:00:00')],
-  ).getRows({ startDate: '2026-11-02', endDate: '2026-11-03' })
+  const zed = employee('1', 'Zed')
+  const abe = employee('2', 'Abe')
+  const rows = await serviceWith([zed, twin10, abe, twin9]).getRows({
+    startDate: '2026-11-02',
+    endDate: '2026-11-03',
+  })
 
+  // Abe sorts before Zed although his id is higher; equal names fall back to numeric id.
   assert.deepEqual(
     rows.map((row) => `${row.date} ${row.employeeId}`),
     [
-      '2026-11-02 1',
+      '2026-11-02 2',
       '2026-11-02 9',
       '2026-11-02 10',
-      '2026-11-03 1',
+      '2026-11-02 1',
+      '2026-11-03 2',
       '2026-11-03 9',
       '2026-11-03 10',
+      '2026-11-03 1',
     ],
   )
 })

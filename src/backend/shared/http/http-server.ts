@@ -34,12 +34,21 @@ const readBody = async (request: IncomingMessage): Promise<unknown> => {
 const writeResponse = (response: ServerResponse, result: HttpResponse): void => {
   const isRaw = typeof result.body === 'string'
   const payload = isRaw ? (result.body as string) : JSON.stringify(result.body)
-  response.writeHead(result.status, {
-    ...CORS_HEADERS,
-    ...(isRaw ? {} : { 'Content-Type': 'application/json; charset=utf-8' }),
-    ...result.headers,
-    'Content-Length': Buffer.byteLength(payload),
-  })
+
+  // Keys are lowercased so a handler header can never duplicate one of ours. CORS and
+  // Content-Length are applied last, so a handler cannot override them.
+  const headers: Record<string, string> = {
+    'content-type': isRaw ? 'text/plain; charset=utf-8' : 'application/json; charset=utf-8',
+  }
+  for (const [name, value] of Object.entries(result.headers ?? {})) {
+    headers[name.toLowerCase()] = value
+  }
+  for (const [name, value] of Object.entries(CORS_HEADERS)) {
+    headers[name.toLowerCase()] = value
+  }
+  headers['content-length'] = String(Buffer.byteLength(payload))
+
+  response.writeHead(result.status, headers)
   response.end(payload)
 }
 

@@ -54,3 +54,41 @@ test('maps AppError to the JSON error envelope', async () => {
     assert.deepEqual(await response.json(), { error: { code: 'TEAPOT', message: 'nope' } })
   })
 })
+
+test('handler headers cannot override CORS or Content-Length, and keys never duplicate', async () => {
+  const routes: Route[] = [
+    {
+      method: 'GET',
+      path: '/h',
+      handler: async () => ({
+        status: 200,
+        body: 'xin chào',
+        headers: {
+          'content-type': 'text/csv',
+          'Content-Length': '1',
+          'Access-Control-Allow-Origin': 'https://evil.example',
+        },
+      }),
+    },
+  ]
+
+  await withServer(routes, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/h`)
+
+    assert.equal(response.headers.get('content-type'), 'text/csv')
+    assert.equal(response.headers.get('access-control-allow-origin'), '*')
+    assert.equal(await response.text(), 'xin chào') // multibyte: length is in bytes, not characters
+  })
+})
+
+test('a string body without headers is served as plain text', async () => {
+  const routes: Route[] = [
+    { method: 'GET', path: '/t', handler: async () => ({ status: 200, body: 'hi' }) },
+  ]
+
+  await withServer(routes, async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/t`)
+
+    assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8')
+  })
+})

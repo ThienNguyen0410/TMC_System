@@ -48,7 +48,7 @@ export class AttendanceReportService {
       ...activity.map((entry) =>
         this.toRow(entry, employeeById.get(entry.employeeId) ?? unknownEmployee(entry.employeeId)),
       ),
-      ...this.absentRows(employees, activity, range),
+      ...this.absentRows(employeeById, activity, range),
     ]
 
     return rows.filter((row) => !filter.status || row.status === filter.status).sort(compareRows)
@@ -70,14 +70,12 @@ export class AttendanceReportService {
 
   // Active employees with no activity on a past-or-present weekday are absent.
   private absentRows(
-    employees: ReportEmployee[],
+    employeeById: Map<string, ReportEmployee>,
     activity: DailyActivity[],
     range: DateRange,
   ): AttendanceReportRow[] {
-    const lastDate = range.endDate < this.today() ? range.endDate : this.today()
-    if (range.startDate > lastDate) {
-      return []
-    }
+    const today = this.today()
+    const lastDate = range.endDate < today ? range.endDate : today
 
     const seen = new Set(activity.map((entry) => `${entry.employeeId}|${entry.date}`))
     const rows: AttendanceReportRow[] = []
@@ -86,7 +84,7 @@ export class AttendanceReportService {
       if (isWeekend(date)) {
         continue
       }
-      for (const employee of employees) {
+      for (const employee of employeeById.values()) {
         if (employee.isActive && !seen.has(`${employee.id}|${date}`)) {
           rows.push(this.toRow({ employeeId: employee.id, date, checkIn: null, checkOut: null }, employee))
         }

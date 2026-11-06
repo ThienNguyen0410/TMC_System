@@ -17,6 +17,10 @@ test('classifyAttendance: incomplete wins over late', () => {
   assert.equal(classifyAttendance('09:30:00', null, LATE_AFTER), 'incomplete')
 })
 
+test('classifyAttendance: a check-out before the check-in is incomplete', () => {
+  assert.equal(classifyAttendance('17:00:00', '09:00:00', LATE_AFTER), 'incomplete')
+})
+
 test('classifyAttendance: exactly at the cutoff is present, one second later is late', () => {
   assert.equal(classifyAttendance('09:00:00', '17:00:00', LATE_AFTER), 'present')
   assert.equal(classifyAttendance('09:00:01', '17:00:00', LATE_AFTER), 'late')
