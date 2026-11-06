@@ -1,4 +1,5 @@
 import type { UserRole } from '../types/auth'
+import { isRecord, readErrorMessage } from './api-utils'
 
 export interface AuthApiUser {
   id: string
@@ -6,26 +7,7 @@ export interface AuthApiUser {
   role: UserRole
 }
 
-interface AuthApiErrorPayload {
-  error?: {
-    message?: string
-  }
-}
-
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function readErrorMessage(payload: unknown): string | null {
-  if (!isRecord(payload)) {
-    return null
-  }
-
-  const error = (payload as AuthApiErrorPayload).error
-  return typeof error?.message === 'string' ? error.message : null
-}
 
 function readUser(payload: unknown): AuthApiUser | null {
   if (!isRecord(payload) || !isRecord(payload.data) || !isRecord(payload.data.user)) {
