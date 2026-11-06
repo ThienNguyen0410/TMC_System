@@ -103,7 +103,7 @@ export class AuthService {
 
     return {
       ...account,
-      role: 'employee',
+      role: input.role,
     }
   }
 

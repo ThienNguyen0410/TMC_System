@@ -1,4 +1,10 @@
-export type UserRole = 'employee' | 'admin'
+export type UserRole =
+  | 'employee'
+  | 'production_supervisor'
+  | 'hr'
+  | 'security_guard'
+  | 'admin'
+  | 'executive_management'
 
 export interface AuthAccount {
   id: string
@@ -16,4 +22,5 @@ export interface RegisterInput {
   email: string
   phone: string
   dateOfBirth: string
+  role: UserRole
 }

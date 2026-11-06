@@ -9,6 +9,7 @@ const validInput = {
   email: '  You@Example.com ',
   phone: '0901234567',
   dateOfBirth: '2003-05-15',
+  role: 'employee',
 }
 
 test('accepts and normalizes a valid registration', () => {
@@ -20,11 +21,26 @@ test('accepts and normalizes a valid registration', () => {
   assert.equal(result.data.email, 'you@example.com')
 })
 
-test('strips fields the client is not allowed to set', () => {
-  const result = registerSchema.safeParse({ ...validInput, role: 'admin' })
+test('accepts canonical roles and normalizes current UI aliases', () => {
+  const canonicalRoles = [
+    'employee',
+    'production_supervisor',
+    'hr',
+    'security_guard',
+    'admin',
+    'executive_management',
+  ] as const
 
-  assert.ok(result.success)
-  assert.equal('role' in result.data, false)
+  for (const role of canonicalRoles) {
+    const result = registerSchema.safeParse({ ...validInput, role })
+    assert.ok(result.success)
+    assert.equal(result.data.role, role)
+  }
+
+  const alias = registerSchema.safeParse({ ...validInput, role: 'security-guard' })
+
+  assert.ok(alias.success)
+  assert.equal(alias.data.role, 'security_guard')
 })
 
 test('rejects invalid registration fields', () => {
@@ -37,6 +53,8 @@ test('rejects invalid registration fields', () => {
     { ...validInput, phone: '12345' },
     { ...validInput, dateOfBirth: '2999-01-01' },
     { ...validInput, dateOfBirth: '2003-02-31' },
+    { ...validInput, role: 'unknown' },
+    { ...validInput, role: '' },
   ]
 
   for (const input of invalidInputs) {

@@ -26,6 +26,7 @@ const registerInput: RegisterInput = {
   email: 'employee09@example.com',
   phone: '0901234567',
   dateOfBirth: '2003-05-15',
+  role: 'production_supervisor',
 }
 
 class FakeAuthRepository implements AuthRepository {
@@ -178,10 +179,34 @@ test('hashes the password in the seeded scrypt format and delegates the account'
 
   const user = await service.register(registerInput)
 
-  assert.deepEqual(user, { id: '9', username: 'employee09', role: 'employee' })
+  assert.deepEqual(user, {
+    id: '9',
+    username: 'employee09',
+    role: 'production_supervisor',
+  })
   assert.ok(repository.created)
   assert.equal(repository.created.username, 'employee09')
+  assert.equal(repository.created.role, 'production_supervisor')
   assert.equal(await verifyPassword(registerInput.password, repository.created.passwordHash), true)
+})
+
+test('registers every supported role', async () => {
+  const roles = [
+    'employee',
+    'production_supervisor',
+    'hr',
+    'security_guard',
+    'admin',
+    'executive_management',
+  ] as const
+
+  for (const role of roles) {
+    const { repository, service } = await setup()
+    const user = await service.register({ ...registerInput, role })
+
+    assert.equal(user.role, role)
+    assert.equal(repository.created?.role, role)
+  }
 })
 
 test('propagates repository conflicts', async () => {

@@ -1,6 +1,20 @@
 import { z } from 'zod'
+import type { UserRole } from '../domain/auth-user.ts'
 
 const passwordPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/
+const userRoles = [
+  'employee',
+  'production_supervisor',
+  'hr',
+  'security_guard',
+  'admin',
+  'executive_management',
+] as const satisfies readonly UserRole[]
+const roleAliases: Record<string, UserRole> = {
+  PS: 'production_supervisor',
+  'security-guard': 'security_guard',
+  'executive managemen': 'executive_management',
+}
 
 export const loginSchema = z.object({
   username: z
@@ -44,4 +58,9 @@ export const registerSchema = z.object({
       (value) => value <= new Date().toISOString().slice(0, 10),
       'Date of birth cannot be in the future.',
     ),
+  role: z
+    .string({ error: 'Role is required.' })
+    .trim()
+    .transform((value) => roleAliases[value] ?? value)
+    .pipe(z.enum(userRoles, { error: 'Select a valid role.' })),
 })

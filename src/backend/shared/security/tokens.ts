@@ -1,10 +1,18 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { SignJWT, jwtVerify } from 'jose'
 
+type AccessTokenRole =
+  | 'employee'
+  | 'production_supervisor'
+  | 'hr'
+  | 'security_guard'
+  | 'admin'
+  | 'executive_management'
+
 export interface AccessTokenPayload {
   id: string
   username: string
-  role: 'employee' | 'admin'
+  role: AccessTokenRole
 }
 
 const secretKey = (secret: string): Uint8Array => new TextEncoder().encode(secret)
@@ -32,7 +40,7 @@ export const verifyAccessToken = async (
     if (
       typeof sub !== 'string' ||
       typeof username !== 'string' ||
-      (role !== 'employee' && role !== 'admin')
+      !isUserRole(role)
     ) {
       return null
     }
@@ -42,6 +50,14 @@ export const verifyAccessToken = async (
     return null
   }
 }
+
+const isUserRole = (role: unknown): role is AccessTokenRole =>
+  role === 'employee' ||
+  role === 'production_supervisor' ||
+  role === 'hr' ||
+  role === 'security_guard' ||
+  role === 'admin' ||
+  role === 'executive_management'
 
 export const hashToken = (token: string): string =>
   createHash('sha256').update(token).digest('hex')

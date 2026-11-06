@@ -31,7 +31,19 @@ interface RefreshTokenRow {
   revokedAt: Date | null
 }
 
-const toRole = (role: string): UserRole => (role === 'admin' ? 'admin' : 'employee')
+const toRole = (role: string): UserRole => {
+  switch (role) {
+    case 'employee':
+    case 'production_supervisor':
+    case 'hr':
+    case 'security_guard':
+    case 'admin':
+    case 'executive_management':
+      return role
+    default:
+      throw new Error(`Unsupported account role: ${role}`)
+  }
+}
 
 const userSelect = `
   SELECT u.id::text AS id, u.username, coalesce(r.name, 'employee') AS role
@@ -105,7 +117,7 @@ export class PostgresAuthRepository implements AuthRepository {
            INSERT INTO "role".account_roles (account_id, role_id)
            SELECT new_user.id, roles.id
            FROM new_user
-           JOIN "role".roles roles ON roles.name = 'employee'
+           JOIN "role".roles roles ON roles.name = $7
          )
          SELECT id::text AS id, username FROM new_user`,
         [
@@ -115,6 +127,7 @@ export class PostgresAuthRepository implements AuthRepository {
           account.phone,
           account.email,
           account.dateOfBirth,
+          account.role,
         ],
       )
 
