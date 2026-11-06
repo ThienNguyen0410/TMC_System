@@ -257,7 +257,9 @@ export function AttendanceTable({
               title="No attendance records found"
               description={
                 hasFilters
-                  ? 'No records match your current search and filters. Try widening the date range.'
+                  ? serverFiltered
+                    ? 'No records match your search.'
+                    : 'No records match your current search and filters. Try widening the date range.'
                   : 'Attendance records will appear here after the employee scans at the kiosk.'
               }
               actionLabel={hasFilters ? 'Clear filters' : undefined}

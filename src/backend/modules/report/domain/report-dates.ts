@@ -42,3 +42,17 @@ export function todayIn(timeZone: string, now: Date = new Date()): string {
     day: '2-digit',
   }).format(now)
 }
+
+// Postgres reads a numeric offset such as '+07:00' with the opposite sign to Intl, which would
+// silently put events on the wrong day, so only named zones (Asia/Ho_Chi_Minh, Etc/GMT-7) pass.
+export function isValidTimeZone(value: string): boolean {
+  if (/^[+\-\d]/.test(value)) {
+    return false
+  }
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: value })
+    return true
+  } catch {
+    return false
+  }
+}

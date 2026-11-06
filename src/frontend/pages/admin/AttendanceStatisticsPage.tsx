@@ -5,7 +5,7 @@ import {
   StopOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
-import { App as AntdApp, Button, Card, DatePicker, Select, Space } from 'antd'
+import { Alert, App as AntdApp, Button, Card, DatePicker, Select, Space } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { AttendanceTable } from '../../components/attendance/AttendanceTable'
@@ -21,12 +21,15 @@ import { attendanceStatusOptions } from '../../utils/attendance'
 
 const { RangePicker } = DatePicker
 const API_DATE_FORMAT = 'YYYY-MM-DD'
+// Mirrors the backend limit on a report range (inclusive days).
+const MAX_RANGE_DAYS = 366
 // A stable empty array: AttendanceTable re-filters whenever its `records` prop changes identity.
 const NO_RECORDS: AttendanceRecord[] = []
 
 interface LoadedReport {
   filter: ReportFilter
   records: AttendanceRecord[]
+  error?: string
 }
 
 export default function AttendanceStatisticsPage() {
@@ -60,12 +63,15 @@ export default function AttendanceStatisticsPage() {
         if (controller.signal.aborted) {
           return
         }
-        setReport({ filter, records: NO_RECORDS })
-        message.error(error instanceof Error ? error.message : 'Unable to load attendance records.')
+        setReport({
+          filter,
+          records: NO_RECORDS,
+          error: error instanceof Error ? error.message : 'Unable to load attendance records.',
+        })
       })
 
     return () => controller.abort()
-  }, [filter, message])
+  }, [filter])
 
   const employeeCount = useMemo(
     () => new Set(records.map((record) => record.employeeId)).size,
@@ -146,7 +152,10 @@ export default function AttendanceStatisticsPage() {
               value={range}
               allowClear={false}
               format="DD/MM/YYYY"
-              disabledDate={(date) => date.isAfter(dayjs(), 'day')}
+              disabledDate={(date, { from }) =>
+                date.isAfter(dayjs(), 'day') ||
+                (from !== undefined && Math.abs(date.diff(from, 'day')) >= MAX_RANGE_DAYS)
+              }
               onChange={(dates) => {
                 if (dates && dates[0] && dates[1]) {
                   setRange([dates[0], dates[1]])
@@ -172,6 +181,9 @@ export default function AttendanceStatisticsPage() {
           </Space>
         }
       >
+        {report?.error && (
+          <Alert type="error" showIcon message={report.error} style={{ marginBottom: 16 }} />
+        )}
         <AttendanceTable
           records={records}
           mode="admin"

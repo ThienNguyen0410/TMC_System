@@ -31,11 +31,11 @@ Three independent halves in one repo, each with its own tsconfig: `src/frontend`
 
 ### Frontend
 - Routing is in `routes/AppRoutes.tsx` (lazy pages). `ProtectedRoute` is role-based, with `/employee/*` and `/admin/*` under separate layouts. `/kiosk` and the auth pages are public.
-- Only **login** is real (`services/auth.api.ts` → `POST /api/auth/login`). Everything else in `context/AuthContext.tsx` (sign-up, profile edits, user deletion) and all attendance and statistics data (`mocks/`) is fake, persisted in `localStorage` under `tmc.*` keys. The session user is built from the API response in `toSessionUser`, so profile fields such as email and phone are blank until overridden locally.
+- Only **login** (`services/auth.api.ts` → `POST /api/auth/login`) and the admin **Statistics** page (`services/report.api.ts` → `/api/reports/attendance[/export]`, the only caller of `api-utils.ts` besides auth) are real. Everything else in `context/AuthContext.tsx` (sign-up, profile edits, user deletion) and the other attendance and statistics data (`mocks/`) is fake, persisted in `localStorage` under `tmc.*` keys. The session user is built from the API response in `toSessionUser`, so profile fields such as email and phone are blank until overridden locally.
 - Styles are SCSS partials, all registered in `styles/main.scss`. A new partial must be added there with `@use`.
 
 ## Gotchas
-- **Roles are not stored in the database.** `domain/auth-user.ts` maps usernames to roles with a hardcoded table (`employee01`, `admin01`); any other username is `employee`. Login reads plaintext passwords from `"user".test_account` (`pass_word` column). This is intentional demo code, and the `"user".users` / `role.*` tables are not used yet.
+- **Roles are not stored in the database.** `domain/auth-user.ts` maps usernames to roles with a hardcoded table (`employee01`, `admin01`); any other username is `employee`. Login reads plaintext passwords from `"user".test_account` (`pass_word` column). This is intentional demo code. The `"user".users` table is only read by the report module (employee names); `role.*` is unused.
 - **`npm run build` fails on the backend project.** `infrastructure/external/hr-payroll/*` import `modules/attendance/attendance.ports.ts` and `attendance.types.ts`, which don't exist. `dev` and `api` are unaffected because nothing imports those gateways.
 - **`attendance` tables now reference `"user".users(id)`** (they pointed at a non-existent `"user".employees`). Databases created from the old script need the attendance schema recreated. Confirm with the attendance owner.
 - **The report endpoints have no authorization yet** (no JWT or role module).

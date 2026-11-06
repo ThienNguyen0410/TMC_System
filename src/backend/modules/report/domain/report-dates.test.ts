@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { daysBetween, eachDate, isValidIsoDate, isWeekend, todayIn } from './report-dates.ts'
+import {
+  daysBetween,
+  eachDate,
+  isValidIsoDate,
+  isValidTimeZone,
+  isWeekend,
+  todayIn,
+} from './report-dates.ts'
 
 test('isValidIsoDate accepts real calendar dates only', () => {
   assert.equal(isValidIsoDate('2026-11-07'), true)
@@ -35,4 +42,14 @@ test('isWeekend: Saturday and Sunday only', () => {
 test('todayIn uses the given time zone, not UTC', () => {
   assert.equal(todayIn('Asia/Ho_Chi_Minh', new Date('2026-11-04T16:30:00Z')), '2026-11-04')
   assert.equal(todayIn('Asia/Ho_Chi_Minh', new Date('2026-11-04T17:00:00Z')), '2026-11-05')
+})
+
+test('isValidTimeZone accepts named zones and rejects numeric offsets', () => {
+  assert.equal(isValidTimeZone('Asia/Ho_Chi_Minh'), true)
+  assert.equal(isValidTimeZone('Etc/GMT-7'), true)
+  assert.equal(isValidTimeZone('UTC'), true)
+  assert.equal(isValidTimeZone('+07:00'), false)
+  assert.equal(isValidTimeZone('-05:00'), false)
+  assert.equal(isValidTimeZone('07:00'), false)
+  assert.equal(isValidTimeZone('Nowhere/City'), false)
 })

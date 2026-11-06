@@ -1,13 +1,11 @@
 import type { UserRole } from '../types/auth'
-import { isRecord, readErrorMessage } from './api-utils'
+import { API_BASE_URL, isRecord, readErrorMessage } from './api-utils'
 
 export interface AuthApiUser {
   id: string
   username: string
   role: UserRole
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 function readUser(payload: unknown): AuthApiUser | null {
   if (!isRecord(payload) || !isRecord(payload.data) || !isRecord(payload.data.user)) {

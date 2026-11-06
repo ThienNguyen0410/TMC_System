@@ -4,7 +4,7 @@ TMC System is an employee attendance management application for an enterprise en
 
 The current implementation focuses on authentication. Login credentials are checked against the `"user".test_account` table in PostgreSQL. The application does not use JWT. After a successful login, the frontend stores the current user session in local storage and redirects the user according to their role.
 
-The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. These screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
+The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. The administrator statistics page reads attendance records and exports CSV from the backend report API; the other screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
 
 ## Tech Stack
 
@@ -409,7 +409,7 @@ The backend is organized by modules. The user module contains the authentication
 - `context/AuthContext.tsx` manages the current user session and calls the login API.
 - `services/auth.api.ts` sends login requests to the backend.
 - `routes/` contains route definitions and role-based route protection.
-- `mocks/` contains local attendance, statistics, and user data used by the current UI.
+- `mocks/` contains local attendance, statistics, and user data used by the screens that are not yet connected to the backend (everything except login and the administrator statistics page).
 - `styles/` contains all SCSS styling.
 - `types/` contains shared frontend TypeScript types.
 - `utils/` contains date, CSV, attendance, and user presentation helpers.

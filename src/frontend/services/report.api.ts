@@ -1,5 +1,5 @@
 import type { AttendanceRecord, AttendanceStatus } from '../types/attendance'
-import { isRecord, readErrorMessage } from './api-utils'
+import { API_BASE_URL, isRecord, readErrorMessage } from './api-utils'
 
 export interface ReportFilter {
   startDate: string
@@ -19,8 +19,6 @@ interface ReportRowPayload {
   status: AttendanceStatus
   workingHours: number | null
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 function toRecord(row: ReportRowPayload): AttendanceRecord {
   return {
@@ -83,17 +81,13 @@ export async function downloadAttendanceReportCsv(filter: ReportFilter): Promise
   const response = await requestReport('/api/reports/attendance/export', filter)
   const blob = await response.blob()
 
-  // The server names the file, but the header is only readable same-origin (the Vite proxy case).
-  const serverName = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')
-  const fileName =
-    serverName?.[1] ?? `tmc-attendance-report-${filter.startDate}_${filter.endDate}.csv`
-
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = fileName
+  link.download = `tmc-attendance-report-${filter.startDate}_${filter.endDate}.csv`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  // Revoke after the browser has started the download.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
