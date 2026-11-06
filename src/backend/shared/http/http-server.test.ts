@@ -1,22 +1,8 @@
 import assert from 'node:assert/strict'
-import type { Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { test } from 'node:test'
 import { AppError } from '../errors/app-error.ts'
-import { createHttpServer } from './http-server.ts'
+import { withServer } from '../testing/with-server.ts'
 import type { Route } from './http.types.ts'
-
-const withServer = async (routes: Route[], run: (baseUrl: string) => Promise<void>) => {
-  const server: Server = createHttpServer(routes)
-  await new Promise<void>((resolve) => server.listen(0, resolve))
-  const { port } = server.address() as AddressInfo
-  try {
-    await run(`http://localhost:${port}`)
-  } finally {
-    server.closeAllConnections()
-    await new Promise((resolve) => server.close(resolve))
-  }
-}
 
 test('serves a string body verbatim with the given headers', async () => {
   const routes: Route[] = [
