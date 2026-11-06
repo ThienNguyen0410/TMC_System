@@ -66,6 +66,8 @@ DB_PASSWORD=<your_db_password>
 | `DB_NAME` | Database name. |
 | `DB_USER` | PostgreSQL user. |
 | `DB_PASSWORD` | Password of the PostgreSQL user. |
+| `REPORT_TIME_ZONE` | Optional. IANA time zone that decides which local day an attendance event belongs to. Defaults to `Asia/Ho_Chi_Minh`. |
+| `REPORT_LATE_AFTER` | Optional. Check-ins after this `HH:mm:ss` time count as late. Defaults to `09:00:00`. |
 
 Do not commit the `.env` file to Git. Replace `<your_db_password>` with the password of your local PostgreSQL account.
 
@@ -177,7 +179,7 @@ The Vite development server proxies requests starting with `/api` to the backend
 | `npm run lint` | Runs oxlint on the project. |
 | `npm run preview` | Previews the frontend production build. |
 
-Note: the current working tree does not contain the backend `attendance` and `report` module implementations, but the legacy HR/Payroll adapters still import their types. Because of this, the backend TypeScript step of `npm run build` may fail. The development commands `npm run dev` and `npm run api` are not affected.
+Note: the current working tree does not contain the backend `attendance` module implementation, but the legacy HR/Payroll adapters still import its types. Because of this, the backend TypeScript step of `npm run build` may fail. The development commands `npm run dev` and `npm run api` are not affected.
 
 ## API Endpoints
 
@@ -185,6 +187,8 @@ Note: the current working tree does not contain the backend `attendance` and `re
 | --- | --- | --- |
 | `GET` | `/api/health` | Health check endpoint. |
 | `POST` | `/api/auth/login` | Validates credentials against `"user".test_account`. |
+| `GET` | `/api/reports/attendance` | Attendance records as JSON. Query: `date`, or `startDate` + `endDate` (`YYYY-MM-DD`, at most 366 days), and optional `status` (`present`, `late`, `absent`, `incomplete`). Defaults to today. |
+| `GET` | `/api/reports/attendance/export` | Same filters, returned as a CSV download. |
 
 ### Login Request
 
@@ -246,7 +250,7 @@ TMC_System/
 │   │   │           └── logging-hr-payroll.gateway.ts
 │   │   ├── modules/
 │   │   │   ├── attendance/              # currently empty
-│   │   │   ├── report/                  # currently empty
+│   │   │   ├── report/                  # attendance report + CSV export
 │   │   │   ├── role/                    # currently empty
 │   │   │   └── user/
 │   │   │       ├── controller/

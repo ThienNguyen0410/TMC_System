@@ -6,6 +6,13 @@ import { AttendanceReportService } from '../service/attendance-report.service.ts
 import { createReportRoutes } from '../routes/report.routes.ts'
 import { AttendanceReportController } from './attendance-report.ts'
 
+interface ListBody {
+  data: { filter: unknown; records: Array<{ status: string }> }
+}
+interface ErrorBody {
+  error: { code: string }
+}
+
 const TODAY = '2026-11-06'
 const HEADER_LINE =
   'Employee ID,Full Name,Username,Department,Date,Check-in Time,Check-out Time,Attendance Status,Working Hours'
@@ -22,7 +29,7 @@ const routes = () => {
 test('GET /api/reports/attendance returns the filter and the records', async () => {
   await withServer(routes(), async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/reports/attendance?date=2026-11-02`)
-    const body = await response.json()
+    const body = (await response.json()) as ListBody
 
     assert.equal(response.status, 200)
     assert.deepEqual(body.data.filter, { startDate: '2026-11-02', endDate: '2026-11-02' })
@@ -33,7 +40,7 @@ test('GET /api/reports/attendance returns the filter and the records', async () 
 
 test('GET /api/reports/attendance defaults to today', async () => {
   await withServer(routes(), async (baseUrl) => {
-    const body = await (await fetch(`${baseUrl}/api/reports/attendance`)).json()
+    const body = (await (await fetch(`${baseUrl}/api/reports/attendance`)).json()) as ListBody
 
     assert.deepEqual(body.data.filter, { startDate: TODAY, endDate: TODAY })
     assert.equal(body.data.records[0].status, 'absent')
@@ -71,7 +78,7 @@ test('invalid parameters are a 400 VALIDATION_ERROR on both endpoints', async ()
   await withServer(routes(), async (baseUrl) => {
     for (const path of ['/api/reports/attendance', '/api/reports/attendance/export']) {
       const response = await fetch(`${baseUrl}${path}?status=foo`)
-      const body = await response.json()
+      const body = (await response.json()) as ErrorBody
 
       assert.equal(response.status, 400)
       assert.equal(body.error.code, 'VALIDATION_ERROR')
