@@ -61,13 +61,13 @@ function toSessionUser(account: AuthApiUser): AppUser {
 
   return {
     id: account.id,
-    fullName: account.username,
+    fullName: account.fullName,
     username: account.username,
-    email: '',
-    phone: '',
-    dateOfBirth: '',
+    email: account.email ?? '',
+    phone: account.phone ?? '',
+    dateOfBirth: account.dateOfBirth ?? '',
     role: account.role,
-    department: account.role === 'admin' ? 'Administration' : 'Employee',
+    department: account.department ?? '',
     qrCode: `TMC-QR-${account.id}-${account.username.toUpperCase()}`,
     avatarColor: avatarPalette[colorIndex],
   }

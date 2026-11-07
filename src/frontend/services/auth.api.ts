@@ -4,6 +4,11 @@ export interface AuthApiUser {
   id: string
   username: string
   role: AccountRole
+  fullName: string
+  email: string | null
+  phone: string | null
+  dateOfBirth: string | null
+  department: string | null
 }
 
 interface AuthApiErrorPayload {
@@ -41,6 +46,10 @@ function readErrorMessage(payload: unknown): string | null {
   return typeof error?.message === 'string' ? error.message : null
 }
 
+function readNullableString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
 function readUser(payload: unknown): AuthApiUser | null {
   if (!isRecord(payload) || !isRecord(payload.data) || !isRecord(payload.data.user)) {
     return null
@@ -50,12 +59,22 @@ function readUser(payload: unknown): AuthApiUser | null {
   if (
     typeof user.id !== 'string' ||
     typeof user.username !== 'string' ||
+    typeof user.fullName !== 'string' ||
     !accountRoles.includes(user.role as AccountRole)
   ) {
     return null
   }
 
-  return { id: user.id, username: user.username, role: user.role as AccountRole }
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role as AccountRole,
+    fullName: user.fullName,
+    email: readNullableString(user.email),
+    phone: readNullableString(user.phone),
+    dateOfBirth: readNullableString(user.dateOfBirth),
+    department: readNullableString(user.department),
+  }
 }
 
 function readSession(payload: unknown): { user: AuthApiUser; accessToken: string } {
