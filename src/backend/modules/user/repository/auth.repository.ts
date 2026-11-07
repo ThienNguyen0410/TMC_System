@@ -1,12 +1,11 @@
-import type { AuthAccount, AuthUser, RegisterInput, UserRole } from '../domain/auth-user.ts'
+import type { AuthAccount, AuthUser, RegisterInput } from '../domain/auth-user.ts'
 
 export interface NewAccount extends RegisterInput {
   passwordHash: string
 }
 
-export interface AuthCredentials extends AuthAccount {
+export interface AuthCredentials extends AuthUser {
   passwordHash: string
-  role: UserRole
   isActive: boolean
 }
 

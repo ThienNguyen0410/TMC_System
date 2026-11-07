@@ -6,7 +6,7 @@ import {
   signAccessToken,
   verifyAccessToken,
 } from '../../../shared/security/tokens.ts'
-import type { AuthUser, RegisterInput } from '../domain/auth-user.ts'
+import type { AuthIdentity, AuthUser, RegisterInput } from '../domain/auth-user.ts'
 import type { AuthRepository, NewRefreshToken } from '../repository/auth.repository.ts'
 
 export interface AuthServiceConfig {
@@ -43,6 +43,11 @@ export class AuthService {
       id: account.id,
       username: account.username,
       role: account.role,
+      fullName: account.fullName,
+      email: account.email,
+      phone: account.phone,
+      dateOfBirth: account.dateOfBirth,
+      department: account.department,
     })
   }
 
@@ -97,7 +102,7 @@ export class AuthService {
     return this.authRepository.findUserById(tokenUser.id)
   }
 
-  async register(input: RegisterInput): Promise<AuthUser> {
+  async register(input: RegisterInput): Promise<AuthIdentity> {
     const passwordHash = await hashPassword(input.password)
     const account = await this.authRepository.createAccount({ ...input, passwordHash })
 

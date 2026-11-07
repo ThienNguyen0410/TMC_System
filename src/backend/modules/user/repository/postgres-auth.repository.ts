@@ -14,13 +14,21 @@ interface AccountRow {
   username: string
 }
 
-interface CredentialsRow extends AccountRow {
+interface ProfileRow {
+  fullName: string
+  email: string | null
+  phone: string | null
+  dateOfBirth: string | null
+  department: string | null
+}
+
+interface CredentialsRow extends AccountRow, ProfileRow {
   passwordHash: string
   role: string
   isActive: boolean
 }
 
-interface UserRow extends AccountRow {
+interface UserRow extends AccountRow, ProfileRow {
   role: string
 }
 
@@ -46,7 +54,9 @@ const toRole = (role: string): UserRole => {
 }
 
 const userSelect = `
-  SELECT u.id::text AS id, u.username, coalesce(r.name, 'employee') AS role
+  SELECT u.id::text AS id, u.username, coalesce(r.name, 'employee') AS role,
+         u.full_name AS "fullName", u.email, u.phone_number AS "phone",
+         u.date_of_birth::text AS "dateOfBirth", u.department
   FROM "user".users u
   LEFT JOIN LATERAL (
     SELECT roles.name
@@ -68,7 +78,9 @@ export class PostgresAuthRepository implements AuthRepository {
   async findByUsername(username: string): Promise<AuthCredentials | null> {
     const result = await this.pool.query<CredentialsRow>(
       `SELECT u.id::text AS id, u.username, u.password_hash AS "passwordHash",
-              u.is_active AS "isActive", coalesce(r.name, 'employee') AS role
+              u.is_active AS "isActive", coalesce(r.name, 'employee') AS role,
+              u.full_name AS "fullName", u.email, u.phone_number AS "phone",
+              u.date_of_birth::text AS "dateOfBirth", u.department
        FROM "user".users u
        LEFT JOIN LATERAL (
          SELECT roles.name
@@ -91,6 +103,11 @@ export class PostgresAuthRepository implements AuthRepository {
           passwordHash: row.passwordHash,
           role: toRole(row.role),
           isActive: row.isActive,
+          fullName: row.fullName,
+          email: row.email,
+          phone: row.phone,
+          dateOfBirth: row.dateOfBirth,
+          department: row.department,
         }
       : null
   }
@@ -102,7 +119,18 @@ export class PostgresAuthRepository implements AuthRepository {
     )
     const row = result.rows[0]
 
-    return row ? { id: row.id, username: row.username, role: toRole(row.role) } : null
+    return row
+      ? {
+          id: row.id,
+          username: row.username,
+          role: toRole(row.role),
+          fullName: row.fullName,
+          email: row.email,
+          phone: row.phone,
+          dateOfBirth: row.dateOfBirth,
+          department: row.department,
+        }
+      : null
   }
 
   async createAccount(account: NewAccount): Promise<AuthAccount> {

@@ -95,6 +95,11 @@ const setup = async (overrides: Partial<AuthCredentials> = {}) => {
     passwordHash,
     role: 'employee',
     isActive: true,
+    fullName: 'Nguyen Van An',
+    email: 'employee01@example.com',
+    phone: '0901234567',
+    dateOfBirth: '2003-05-15',
+    department: 'Engineering',
     ...overrides,
   }
 
@@ -103,6 +108,11 @@ const setup = async (overrides: Partial<AuthCredentials> = {}) => {
     id: credentials.id,
     username: credentials.username,
     role: credentials.role,
+    fullName: credentials.fullName,
+    email: credentials.email,
+    phone: credentials.phone,
+    dateOfBirth: credentials.dateOfBirth,
+    department: credentials.department,
   })
 
   return { repository, service: new AuthService(repository, config) }
@@ -113,8 +123,21 @@ test('logs in with a valid password and issues both tokens', async () => {
 
   const session = await service.login(' Employee01 ', 'Secret123!')
 
-  assert.deepEqual(session.user, { id: '1', username: 'employee01', role: 'employee' })
-  assert.deepEqual(await verifyAccessToken(session.accessToken, config.accessTokenSecret), session.user)
+  assert.deepEqual(session.user, {
+    id: '1',
+    username: 'employee01',
+    role: 'employee',
+    fullName: 'Nguyen Van An',
+    email: 'employee01@example.com',
+    phone: '0901234567',
+    dateOfBirth: '2003-05-15',
+    department: 'Engineering',
+  })
+  assert.deepEqual(await verifyAccessToken(session.accessToken, config.accessTokenSecret), {
+    id: '1',
+    username: 'employee01',
+    role: 'employee',
+  })
   assert.equal(repository.tokens.length, 1)
   assert.equal(repository.tokens[0].tokenHash, hashToken(session.refreshToken))
   assert.equal(repository.tokens[0].revokedAt, null)
@@ -141,7 +164,11 @@ test('rotates the refresh token and rejects the used one', async () => {
   const second = await service.refresh(first.refreshToken)
 
   assert.notEqual(second.refreshToken, first.refreshToken)
-  assert.deepEqual(await verifyAccessToken(second.accessToken, config.accessTokenSecret), second.user)
+  assert.deepEqual(await verifyAccessToken(second.accessToken, config.accessTokenSecret), {
+    id: '1',
+    username: 'employee01',
+    role: 'employee',
+  })
   assert.ok(repository.tokens[0].revokedAt)
   assert.equal(repository.tokens.length, 2)
 

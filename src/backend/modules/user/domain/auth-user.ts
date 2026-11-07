@@ -11,7 +11,19 @@ export interface AuthAccount {
   username: string
 }
 
-export interface AuthUser extends AuthAccount {
+export interface AuthProfile {
+  fullName: string
+  email: string | null
+  phone: string | null
+  dateOfBirth: string | null
+  department: string | null
+}
+
+export interface AuthIdentity extends AuthAccount {
+  role: UserRole
+}
+
+export interface AuthUser extends AuthAccount, AuthProfile {
   role: UserRole
 }
 

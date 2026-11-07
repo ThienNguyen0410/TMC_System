@@ -116,7 +116,16 @@ Content-Type: application/json
 ```json
 {
   "data": {
-    "user": { "id": "2", "username": "admin01", "role": "admin" },
+    "user": {
+      "id": "2",
+      "username": "admin01",
+      "role": "admin",
+      "fullName": "TMC Administrator",
+      "email": "admin01@example.com",
+      "phone": "0900000001",
+      "dateOfBirth": "1990-01-01",
+      "department": "Administration"
+    },
     "accessToken": "eyJhbGciOiJIUzI1NiJ9..."
   }
 }
@@ -146,11 +155,26 @@ Errors: `401 INVALID_CREDENTIALS` when the cookie is missing, expired, revoked, 
 
 ## GET /api/auth/me
 
-Returns the authenticated user. Requires `Authorization: Bearer <accessToken>`.
+Returns the authenticated user, including the account profile. Requires `Authorization: Bearer <accessToken>`.
 
 ```json
-{ "data": { "user": { "id": "2", "username": "admin01", "role": "admin" } } }
+{
+  "data": {
+    "user": {
+      "id": "2",
+      "username": "admin01",
+      "role": "admin",
+      "fullName": "TMC Administrator",
+      "email": "admin01@example.com",
+      "phone": "0900000001",
+      "dateOfBirth": "1990-01-01",
+      "department": "Administration"
+    }
+  }
+}
 ```
+
+`email`, `phone`, `dateOfBirth` and `department` can be `null`; `fullName` is always present. `dateOfBirth` is a `YYYY-MM-DD` string, not an ISO timestamp. The user is re-read from the database on every request, so role changes and deactivation apply immediately.
 
 Errors: `401 INVALID_CREDENTIALS` when the header is missing/invalid, the token expired, or the account was deactivated.
 
@@ -217,4 +241,4 @@ Notes:
 
 ### Current frontend gap
 
-`src/frontend/services/auth.api.ts` only reads `data.user` from the login response and drops `accessToken`; nothing calls `/refresh`, `/logout` or `/me` yet. Sign-up, profile edit and delete are still `localStorage` mocks.
+`src/frontend/services/auth.api.ts` wires login, register, logout and refresh; the session (including the profile fields above) is restored from `/refresh` on boot and the access token is kept in memory. `GET /api/auth/me` is implemented but not called by the frontend. Profile edit, delete and forgot-password are still `localStorage` mocks.
