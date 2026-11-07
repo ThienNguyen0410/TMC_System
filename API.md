@@ -141,7 +141,6 @@ Cookie: refresh_token=... (sent automatically by the browser)
 
 Errors: `401 INVALID_CREDENTIALS` when the cookie is missing, expired, revoked, or already used.
 
-> **Known issue:** rotation currently always fails with `401` (the rotation SQL updates the same row twice, so it reports zero rows after revoking the old token). Do not wire auto-refresh into the frontend until that is fixed — each attempt also invalidates the current refresh token.
 
 ---
 

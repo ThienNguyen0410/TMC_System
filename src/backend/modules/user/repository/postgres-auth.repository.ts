@@ -163,25 +163,56 @@ export class PostgresAuthRepository implements AuthRepository {
   }
 
   async rotateRefreshToken(currentId: string, next: NewRefreshToken): Promise<boolean> {
-    const result = await this.pool.query(
-      `WITH current AS (
-         UPDATE "user".refresh_tokens
+    const client = await this.pool.connect()
+
+    try {
+      await client.query('BEGIN')
+
+      const current = await client.query<{ userId: string }>(
+        `UPDATE "user".refresh_tokens
          SET revoked_at = NOW()
          WHERE id = $1 AND revoked_at IS NULL AND expires_at > NOW()
-         RETURNING id, user_id
-       ), created AS (
-         INSERT INTO "user".refresh_tokens (user_id, token_hash, expires_at)
-         SELECT user_id, $2, $3 FROM current
-         RETURNING id
-       )
-       UPDATE "user".refresh_tokens
-       SET replaced_by_id = (SELECT id FROM created)
-       WHERE id = (SELECT id FROM current)
-       RETURNING id`,
-      [currentId, next.tokenHash, next.expiresAt],
-    )
+         RETURNING user_id::text AS "userId"`,
+        [currentId],
+      )
 
-    return result.rowCount === 1
+      if (current.rowCount !== 1) {
+        await client.query('ROLLBACK')
+        return false
+      }
+
+      const replacement = await client.query<{ id: string }>(
+        `INSERT INTO "user".refresh_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, $3)
+         RETURNING id::text AS id`,
+        [current.rows[0].userId, next.tokenHash, next.expiresAt],
+      )
+
+      const replacementId = replacement.rows[0]?.id
+
+      if (!replacementId) {
+        throw new Error('Refresh token replacement was not created')
+      }
+
+      const linked = await client.query(
+        `UPDATE "user".refresh_tokens
+         SET replaced_by_id = $2
+         WHERE id = $1`,
+        [currentId, replacementId],
+      )
+
+      if (linked.rowCount !== 1) {
+        throw new Error('Refresh token replacement was not linked')
+      }
+
+      await client.query('COMMIT')
+      return true
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
+      throw error
+    } finally {
+      client.release()
+    }
   }
 
   async revokeRefreshToken(tokenHash: string): Promise<void> {
