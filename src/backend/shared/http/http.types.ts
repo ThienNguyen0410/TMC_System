@@ -10,7 +10,9 @@ export interface HttpRequest {
 
 export interface HttpResponse {
   status: number
+  // A string body is written verbatim (use with a Content-Type header); anything else is sent as JSON.
   body: unknown
+  headers?: Record<string, string>
 }
 
 export type RouteHandler = (request: HttpRequest) => Promise<HttpResponse>

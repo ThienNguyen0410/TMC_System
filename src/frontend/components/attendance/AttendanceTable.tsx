@@ -25,6 +25,9 @@ interface AttendanceTableProps {
   mode: 'employee' | 'admin'
   pageSize?: number
   onFilteredChange?: (records: AttendanceRecord[]) => void
+  // The parent already filtered by status and date range on the server: hide those two controls.
+  serverFiltered?: boolean
+  loading?: boolean
 }
 
 export function AttendanceTable({
@@ -32,6 +35,8 @@ export function AttendanceTable({
   mode,
   pageSize = 8,
   onFilteredChange,
+  serverFiltered = false,
+  loading = false,
 }: AttendanceTableProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<AttendanceStatus | undefined>(undefined)
@@ -197,27 +202,31 @@ export function AttendanceTable({
           onChange={(event) => setSearchQuery(event.target.value)}
           allowClear
         />
-        <Select
-          className="attendance-toolbar__select"
-          placeholder="All statuses"
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value as AttendanceStatus | undefined)}
-          options={attendanceStatusOptions}
-          allowClear
-        />
-        <RangePicker
-          className="attendance-toolbar__range"
-          value={dateRange}
-          onChange={(dates) => {
-            if (dates && dates[0] && dates[1]) {
-              setDateRange([dates[0], dates[1]])
-              return
-            }
-            setDateRange(null)
-          }}
-          format="DD/MM/YYYY"
-          placeholder={['From date', 'To date']}
-        />
+        {!serverFiltered && (
+          <>
+            <Select
+              className="attendance-toolbar__select"
+              placeholder="All statuses"
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value as AttendanceStatus | undefined)}
+              options={attendanceStatusOptions}
+              allowClear
+            />
+            <RangePicker
+              className="attendance-toolbar__range"
+              value={dateRange}
+              onChange={(dates) => {
+                if (dates && dates[0] && dates[1]) {
+                  setDateRange([dates[0], dates[1]])
+                  return
+                }
+                setDateRange(null)
+              }}
+              format="DD/MM/YYYY"
+              placeholder={['From date', 'To date']}
+            />
+          </>
+        )}
         <Button icon={<ReloadOutlined />} onClick={resetFilters} disabled={!hasFilters}>
           Reset
         </Button>
@@ -232,6 +241,7 @@ export function AttendanceTable({
       </div>
       <Table
         rowKey="id"
+        loading={loading}
         columns={columns}
         dataSource={filteredRecords}
         scroll={{ x: mode === 'admin' ? 1080 : 860 }}
@@ -247,7 +257,9 @@ export function AttendanceTable({
               title="No attendance records found"
               description={
                 hasFilters
-                  ? 'No records match your current search and filters. Try widening the date range.'
+                  ? serverFiltered
+                    ? 'No records match your search.'
+                    : 'No records match your current search and filters. Try widening the date range.'
                   : 'Attendance records will appear here after the employee scans at the kiosk.'
               }
               actionLabel={hasFilters ? 'Clear filters' : undefined}

@@ -8,6 +8,7 @@
     "api": "node --watch src/backend/server.ts",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --test \"src/backend/**/*.test.ts\"",
     "preview": "vite preview"
   },
   "dependencies": {
