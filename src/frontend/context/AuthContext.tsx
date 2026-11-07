@@ -1,6 +1,12 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { mockUsers } from '../mocks/users'
-import { loginWithPassword, type AuthApiUser } from '../services/auth.api'
+import {
+  loginWithPassword,
+  logoutSession,
+  refreshSession,
+  registerAccount,
+  type AuthApiUser,
+} from '../services/auth.api'
 import type {
   AppUser,
   LoginResult,
@@ -11,8 +17,6 @@ import type {
 } from '../types/auth'
 import { AuthContext, type AuthContextValue } from './authContextValue'
 
-const SESSION_USER_KEY = 'tmc.session.user'
-const REGISTERED_USERS_KEY = 'tmc.mock.registered-users'
 const PROFILE_OVERRIDES_KEY = 'tmc.mock.profile-overrides'
 const DELETED_USERS_KEY = 'tmc.mock.deleted-users'
 
@@ -33,24 +37,6 @@ function writeStorage(key: string, value: unknown): void {
   } catch {
     return
   }
-}
-
-function clearSession(): void {
-  try {
-    window.localStorage.removeItem(SESSION_USER_KEY)
-  } catch {
-    return
-  }
-}
-
-function readSessionUser(): AppUser | null {
-  const session = readStorage<AppUser | null>(SESSION_USER_KEY, null)
-
-  if (!session || typeof session.id !== 'string' || typeof session.username !== 'string') {
-    return null
-  }
-
-  return session
 }
 
 function toPublicUser(user: MockUser, override?: ProfileUpdateInput): AppUser {
@@ -92,25 +78,38 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [registeredUsers, setRegisteredUsers] = useState<MockUser[]>(() =>
-    readStorage<MockUser[]>(REGISTERED_USERS_KEY, []),
-  )
   const [profileOverrides, setProfileOverrides] = useState<Record<string, ProfileUpdateInput>>(() =>
     readStorage<Record<string, ProfileUpdateInput>>(PROFILE_OVERRIDES_KEY, {}),
   )
   const [deletedUserIds, setDeletedUserIds] = useState<string[]>(() =>
     readStorage<string[]>(DELETED_USERS_KEY, []),
   )
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => readSessionUser())
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null)
+  const [isRestoring, setIsRestoring] = useState(true)
 
-  const baseAccounts = useMemo(
-    () => [...mockUsers, ...registeredUsers],
-    [registeredUsers],
-  )
+  useEffect(() => {
+    let active = true
+
+    void refreshSession()
+      .then((account) => {
+        if (active && account) {
+          setCurrentUser(toSessionUser(account))
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsRestoring(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const allAccounts = useMemo(
-    () => baseAccounts.filter((account) => !deletedUserIds.includes(account.id)),
-    [baseAccounts, deletedUserIds],
+    () => mockUsers.filter((account) => !deletedUserIds.includes(account.id)),
+    [deletedUserIds],
   )
 
   const users = useMemo(
@@ -120,11 +119,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(async (username: string, password: string): Promise<LoginResult> => {
     try {
-      const account = await loginWithPassword(username.trim(), password)
-      const sessionUser = toSessionUser(account)
+      const sessionUser = toSessionUser(await loginWithPassword(username.trim(), password))
 
       setCurrentUser(sessionUser)
-      writeStorage(SESSION_USER_KEY, sessionUser)
 
       return { ok: true, user: sessionUser }
     } catch (error) {
@@ -137,54 +134,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const signOut = useCallback(() => {
     setCurrentUser(null)
-    clearSession()
+    void logoutSession()
   }, [])
 
-  const register = useCallback(
-    (input: RegisterInput): RegisterResult => {
-      const normalizedUsername = input.username.trim().toLowerCase()
-      const normalizedEmail = input.email.trim().toLowerCase()
+  const register = useCallback(async (input: RegisterInput): Promise<RegisterResult> => {
+    try {
+      await registerAccount(input)
+      const sessionUser = toSessionUser(await loginWithPassword(input.username, input.password))
 
-      if (allAccounts.some((account) => account.username.toLowerCase() === normalizedUsername)) {
-        return { ok: false, error: 'This username is already in use.', field: 'username' }
-      }
-
-      if (allAccounts.some((account) => account.email.toLowerCase() === normalizedEmail)) {
-        return { ok: false, error: 'An account with this email already exists.', field: 'email' }
-      }
-
-      const highestEmployeeNumber = baseAccounts
-        .filter((account) => account.role === 'employee' && /^EMP-\d+$/.test(account.id))
-        .reduce((highest, account) => Math.max(highest, Number(account.id.slice(4))), 0)
-      const nextNumber = highestEmployeeNumber + 1
-      const employeeId = `EMP-${String(nextNumber).padStart(4, '0')}`
-      const qrToken = Math.random().toString(36).slice(2, 6).toUpperCase()
-      const newAccount: MockUser = {
-        id: employeeId,
-        fullName: input.fullName.trim(),
-        username: normalizedUsername,
-        password: input.password,
-        email: normalizedEmail,
-        phone: input.phone.trim(),
-        dateOfBirth: input.dateOfBirth,
-        role: 'employee',
-        department: 'General',
-        qrCode: `TMC-QR-${employeeId}-${qrToken}`,
-        avatarColor: avatarPalette[(nextNumber - 1) % avatarPalette.length],
-      }
-
-      const nextRegisteredUsers = [...registeredUsers, newAccount]
-      const sessionUser = toPublicUser(newAccount)
-
-      setRegisteredUsers(nextRegisteredUsers)
-      writeStorage(REGISTERED_USERS_KEY, nextRegisteredUsers)
       setCurrentUser(sessionUser)
-      writeStorage(SESSION_USER_KEY, sessionUser)
 
       return { ok: true, user: sessionUser }
-    },
-    [allAccounts, baseAccounts, registeredUsers],
-  )
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Registration failed. Please try again.',
+      }
+    }
+  }, [])
 
   const updateProfile = useCallback(
     (userId: string, input: ProfileUpdateInput): AppUser | null => {
@@ -202,7 +169,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         if (currentUser?.id === userId) {
           setCurrentUser(updatedUser)
-          writeStorage(SESSION_USER_KEY, updatedUser)
         }
 
         return updatedUser
@@ -211,7 +177,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (currentUser?.id === userId) {
         const updatedUser = { ...currentUser, ...input }
         setCurrentUser(updatedUser)
-        writeStorage(SESSION_USER_KEY, updatedUser)
         return updatedUser
       }
 
@@ -247,6 +212,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const value: AuthContextValue = {
     currentUser,
+    isRestoring,
     users,
     login,
     signOut,

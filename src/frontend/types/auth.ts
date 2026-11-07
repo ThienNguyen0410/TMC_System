@@ -1,4 +1,10 @@
-export type UserRole = 'employee' | 'admin'
+export type AccountRole =
+  | 'employee'
+  | 'production_supervisor'
+  | 'hr'
+  | 'security_guard'
+  | 'admin'
+  | 'executive_management'
 
 export interface MockUser {
   id: string
@@ -8,7 +14,7 @@ export interface MockUser {
   email: string
   phone: string
   dateOfBirth: string
-  role: UserRole
+  role: AccountRole
   department: string
   qrCode: string
   avatarColor: string
@@ -29,6 +35,7 @@ export interface RegisterInput {
   email: string
   phone: string
   dateOfBirth: string
+  role: string
 }
 
 export type RegisterErrorField = 'username' | 'email'

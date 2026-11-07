@@ -13,7 +13,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../../components/layout/AuthLayout'
 import { useAuth } from '../../hooks/useAuth'
 import type { AppUser } from '../../types/auth'
-import { delay } from '../../utils/async'
 
 interface SignUpFormValues {
   fullName: string
@@ -23,6 +22,7 @@ interface SignUpFormValues {
   dateOfBirth: Dayjs
   password: string
   confirmPassword: string
+  role: string
 }
 
 export default function SignUpPage() {
@@ -38,15 +38,15 @@ export default function SignUpPage() {
   const handleSubmit = async (values: SignUpFormValues) => {
     setSubmitting(true)
     setError(null)
-    await delay(900)
 
-    const result = register({
+    const result = await register({
       fullName: values.fullName,
       username: values.username,
       password: values.password,
       email: values.email,
       phone: values.phone,
       dateOfBirth: values.dateOfBirth.format('YYYY-MM-DD'),
+      role: values.role,
     })
 
     if (!result.ok || !result.user) {
@@ -140,9 +140,10 @@ export default function SignUpPage() {
 
         <Form.Item
         label="Role"
+        name="role"
+        initialValue="employee"
         >
           <Select
-          defaultValue={'employee'}
           options={[
             {value: "employee", label: "Employee"},
             {value: "admin", label: "Admin"},

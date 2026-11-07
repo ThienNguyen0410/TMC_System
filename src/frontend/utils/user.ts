@@ -1,3 +1,5 @@
+import type { AccountRole } from '../types/auth'
+
 export function getInitials(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) {
@@ -9,6 +11,15 @@ export function getInitials(fullName: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
 }
 
-export function getRoleLabel(role: 'employee' | 'admin'): string {
-  return role === 'admin' ? 'Administrator' : 'Employee'
+const roleLabels: Record<AccountRole, string> = {
+  employee: 'Employee',
+  production_supervisor: 'Production Supervisor',
+  hr: 'Human Resources',
+  security_guard: 'Security Guard',
+  admin: 'Administrator',
+  executive_management: 'Executive Management',
+}
+
+export function getRoleLabel(role: AccountRole): string {
+  return roleLabels[role]
 }

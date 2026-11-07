@@ -1,9 +1,9 @@
-import type { UserRole } from '../types/auth'
+import type { AccountRole, RegisterInput } from '../types/auth'
 
 export interface AuthApiUser {
   id: string
   username: string
-  role: UserRole
+  role: AccountRole
 }
 
 interface AuthApiErrorPayload {
@@ -13,6 +13,20 @@ interface AuthApiErrorPayload {
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+
+const accountRoles: readonly AccountRole[] = [
+  'employee',
+  'production_supervisor',
+  'hr',
+  'security_guard',
+  'admin',
+  'executive_management',
+]
+
+// The access token stays in memory only; the refresh token is the httpOnly cookie.
+let accessToken: string | null = null
+// React StrictMode mounts twice in dev; two concurrent rotations would revoke each other.
+let pendingRefresh: Promise<AuthApiUser | null> | null = null
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -36,27 +50,36 @@ function readUser(payload: unknown): AuthApiUser | null {
   if (
     typeof user.id !== 'string' ||
     typeof user.username !== 'string' ||
-    (user.role !== 'employee' && user.role !== 'admin')
+    !accountRoles.includes(user.role as AccountRole)
   ) {
     return null
   }
 
-  return { id: user.id, username: user.username, role: user.role }
+  return { id: user.id, username: user.username, role: user.role as AccountRole }
 }
 
-export async function loginWithPassword(
-  username: string,
-  password: string,
-): Promise<AuthApiUser> {
+function readSession(payload: unknown): { user: AuthApiUser; accessToken: string } {
+  const user = readUser(payload)
+  const data = isRecord(payload) && isRecord(payload.data) ? payload.data : null
+
+  if (!user || typeof data?.accessToken !== 'string') {
+    throw new Error('The authentication server returned an invalid response.')
+  }
+
+  return { user, accessToken: data.accessToken }
+}
+
+async function request(path: string, init: RequestInit = {}): Promise<unknown> {
   let response: Response
 
   try {
-    response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
+    response = await fetch(`${API_BASE_URL}/api/auth${path}`, {
+      ...init,
+      credentials: 'include',
       headers: {
-        'Content-Type': 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      body: JSON.stringify({ username, password }),
     })
   } catch {
     throw new Error('Unable to connect to the authentication server.')
@@ -65,13 +88,50 @@ export async function loginWithPassword(
   const payload: unknown = await response.json().catch(() => null)
 
   if (!response.ok) {
-    throw new Error(readErrorMessage(payload) ?? 'Invalid username or password. Please try again.')
+    throw new Error(readErrorMessage(payload) ?? 'The authentication server rejected the request.')
   }
 
-  const user = readUser(payload)
-  if (!user) {
-    throw new Error('The authentication server returned an invalid response.')
-  }
+  return payload
+}
 
-  return user
+export async function loginWithPassword(
+  username: string,
+  password: string,
+): Promise<AuthApiUser> {
+  const session = readSession(
+    await request('/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  )
+
+  accessToken = session.accessToken
+  return session.user
+}
+
+export async function registerAccount(input: RegisterInput): Promise<void> {
+  await request('/register', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function refreshSession(): Promise<AuthApiUser | null> {
+  pendingRefresh ??= request('/refresh', { method: 'POST' })
+    .then((payload) => {
+      const session = readSession(payload)
+      accessToken = session.accessToken
+      return session.user
+    })
+    .catch(() => null)
+    .finally(() => {
+      pendingRefresh = null
+    })
+
+  return pendingRefresh
+}
+
+export async function logoutSession(): Promise<void> {
+  accessToken = null
+  await request('/logout', { method: 'POST' }).catch(() => undefined)
 }

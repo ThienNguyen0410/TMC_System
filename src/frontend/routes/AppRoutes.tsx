@@ -34,6 +34,12 @@ function HomeRedirect() {
 }
 
 export function AppRoutes() {
+  const { isRestoring } = useAuth()
+
+  if (isRestoring) {
+    return <PageLoading />
+  }
+
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
@@ -46,7 +52,7 @@ export function AppRoutes() {
         <Route
           path="/employee"
           element={
-            <ProtectedRoute role="employee">
+            <ProtectedRoute area="employee">
               <EmployeeLayout />
             </ProtectedRoute>
           }
@@ -59,7 +65,7 @@ export function AppRoutes() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute role="admin">
+            <ProtectedRoute area="admin">
               <AdminLayout />
             </ProtectedRoute>
           }
