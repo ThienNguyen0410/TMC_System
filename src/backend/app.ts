@@ -21,6 +21,11 @@ import { createAuthRouter } from './modules/user/routes/auth.routes.ts'
 import { createUserRouter } from './modules/user/routes/user.routes.ts'
 import { AuthService } from './modules/user/service/auth.service.ts'
 import { UserService } from './modules/user/service/user.service.ts'
+import { RoleController } from './modules/role/controller/role.controller.ts'
+import { AdminProtectedRoleChangePolicy } from './modules/role/domain/admin-protected-role-change-policy.ts'
+import { PostgresRoleRepository } from './modules/role/repository/postgres-role.repository.ts'
+import { createRoleRouter } from './modules/role/routes/role.routes.ts'
+import { RoleService } from './modules/role/service/role.service.ts'
 import { errorHandler, notFoundHandler } from './shared/http/error-handler.ts'
 
 export const createApp = () => {
@@ -53,6 +58,10 @@ export const createApp = () => {
   })
   const attendanceController = new AttendanceController(qrCodeService, attendanceService)
 
+  const roleRepository = new PostgresRoleRepository(pool)
+  const roleService = new RoleService(roleRepository, new AdminProtectedRoleChangePolicy())
+  const roleController = new RoleController(roleService)
+
   const app = express()
 
   app.disable('x-powered-by')
@@ -64,6 +73,7 @@ export const createApp = () => {
   app.use('/api/users', createUserRouter(userController, authService))
   app.use('/api/reports', createReportRouter(reportController, authService))
   app.use('/api/attendance', createAttendanceRouter(attendanceController, authService))
+  app.use('/api/rbac', createRoleRouter(roleController, authService, roleRepository))
 
   app.get('/api/health', (_request, response) => {
     response.json({ data: { status: 'ok' } })
