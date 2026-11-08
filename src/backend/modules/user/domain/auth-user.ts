@@ -27,6 +27,15 @@ export interface AuthUser extends AuthAccount, AuthProfile {
   role: UserRole
 }
 
+// The part of an account an administrator may edit. Username and role are not here.
+export interface UpdateProfileInput {
+  fullName: string
+  email: string
+  phone: string
+  dateOfBirth: string
+  department: string
+}
+
 export interface RegisterInput {
   fullName: string
   username: string

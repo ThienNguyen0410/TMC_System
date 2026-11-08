@@ -16,6 +16,32 @@ const roleAliases: Record<string, UserRole> = {
   'executive managemen': 'executive_management',
 }
 
+export const fullNameSchema = z
+  .string({ error: 'Full name is required.' })
+  .trim()
+  .min(2, 'Full name must be at least 2 characters.')
+  .max(60, 'Full name must be 60 characters or fewer.')
+
+export const emailSchema = z
+  .string({ error: 'Email is required.' })
+  .trim()
+  .toLowerCase()
+  .max(100, 'Email must be 100 characters or fewer.')
+  .email('Please enter a valid email address.')
+
+export const phoneSchema = z
+  .string({ error: 'Phone number is required.' })
+  .trim()
+  .regex(/^(0|\+84)\d{9}$/, 'Enter a valid Vietnamese phone number, e.g. 0901234567.')
+
+export const dateOfBirthSchema = z
+  .iso
+  .date('Please enter a valid date of birth.')
+  .refine(
+    (value) => value <= new Date().toISOString().slice(0, 10),
+    'Date of birth cannot be in the future.',
+  )
+
 export const loginSchema = z.object({
   username: z
     .string({ error: 'username is required' })
@@ -25,11 +51,7 @@ export const loginSchema = z.object({
 })
 
 export const registerSchema = z.object({
-  fullName: z
-    .string({ error: 'Full name is required.' })
-    .trim()
-    .min(2, 'Full name must be at least 2 characters.')
-    .max(60, 'Full name must be 60 characters or fewer.'),
+  fullName: fullNameSchema,
   username: z
     .string({ error: 'Username is required.' })
     .trim()
@@ -41,23 +63,9 @@ export const registerSchema = z.object({
   password: z
     .string({ error: 'Password is required.' })
     .regex(passwordPolicy, 'Include uppercase, lowercase, number, and symbol.'),
-  email: z
-    .string({ error: 'Email is required.' })
-    .trim()
-    .toLowerCase()
-    .max(100, 'Email must be 100 characters or fewer.')
-    .email('Please enter a valid email address.'),
-  phone: z
-    .string({ error: 'Phone number is required.' })
-    .trim()
-    .regex(/^(0|\+84)\d{9}$/, 'Enter a valid Vietnamese phone number, e.g. 0901234567.'),
-  dateOfBirth: z
-    .iso
-    .date('Please enter a valid date of birth.')
-    .refine(
-      (value) => value <= new Date().toISOString().slice(0, 10),
-      'Date of birth cannot be in the future.',
-    ),
+  email: emailSchema,
+  phone: phoneSchema,
+  dateOfBirth: dateOfBirthSchema,
   role: z
     .string({ error: 'Role is required.' })
     .trim()

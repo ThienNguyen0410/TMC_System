@@ -27,8 +27,8 @@ Failure is always wrapped in `error`:
 | 400    | `INVALID_JSON`        | Body is not valid JSON               |
 | 401    | `INVALID_CREDENTIALS` | Bad login, missing/expired token     |
 | 403    | `FORBIDDEN`           | Signed in, but the role is not allowed |
-| 404    | `NOT_FOUND`           | No such route                        |
-| 409    | `CONFLICT`            | Username or email already registered |
+| 404    | `NOT_FOUND`           | No such route, or no such account     |
+| 409    | `CONFLICT`            | Username or email already in use     |
 | 500    | `INTERNAL_ERROR`      | Unexpected server error              |
 
 ### Authentication
@@ -231,6 +231,61 @@ Errors: `401 INVALID_CREDENTIALS` when the header is missing/invalid, the token 
 Revokes the refresh token from the cookie and clears it. No request body.
 
 `204 No Content`, empty body. No auth header needed. The access token itself stays valid until it expires (up to 15 minutes).
+
+---
+
+## GET /api/users
+
+Every account, ordered by full name. **Admin only**: `401` without a valid token, `403 FORBIDDEN` for any other role (the role is read from the database).
+
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": "1",
+        "username": "employee01",
+        "role": "employee",
+        "fullName": "Nguyen Van An",
+        "email": "employee01@example.com",
+        "phone": "0901234567",
+        "dateOfBirth": "2003-05-15",
+        "department": "Engineering"
+      }
+    ]
+  }
+}
+```
+
+`email`, `phone`, `dateOfBirth` and `department` can be `null`. Deactivated accounts are included. There is no server-side search or paging; the management page filters client-side.
+
+---
+
+## PUT /api/users/{id}
+
+Replaces the editable profile of one account. **Admin only**. `{id}` is the numeric account id from `GET /api/users`; any other format is a `400 VALIDATION_ERROR`.
+
+| Field         | Type   | Rules                                     |
+| ------------- | ------ | ----------------------------------------- |
+| `fullName`    | string | 2-60 characters                           |
+| `email`       | string | valid, max 100, stored lowercase, unique  |
+| `phone`       | string | `^(0|\+84)\d{9}$`                         |
+| `department`  | string | 1-100 characters                          |
+| `dateOfBirth` | string | `YYYY-MM-DD`, not in the future           |
+
+All five fields are required. `username` and `role` cannot be changed by this endpoint.
+
+```http
+PUT /api/users/1
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+{ "fullName": "Nguyen Van An", "email": "employee01@example.com", "phone": "0901234567", "department": "Engineering", "dateOfBirth": "2003-05-15" }
+```
+
+`200 OK` with the updated account as `{ data: { user } }`.
+
+Errors: `400 VALIDATION_ERROR`, `404 NOT_FOUND` for an unknown id, `409 CONFLICT` when the email belongs to another account.
 
 ---
 

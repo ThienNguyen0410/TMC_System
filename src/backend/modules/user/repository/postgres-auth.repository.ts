@@ -1,6 +1,11 @@
 import type { Pool } from 'pg'
 import { ConflictError } from '../../../shared/errors/app-error.ts'
-import type { AuthAccount, AuthUser, UserRole } from '../domain/auth-user.ts'
+import type {
+  AuthAccount,
+  AuthUser,
+  UpdateProfileInput,
+  UserRole,
+} from '../domain/auth-user.ts'
 import type {
   AuthCredentials,
   AuthRepository,
@@ -10,6 +15,7 @@ import type {
   PasswordResetRecord,
   RefreshTokenRecord,
 } from './auth.repository.ts'
+import type { UserRepository } from './user.repository.ts'
 
 interface AccountRow {
   id: string
@@ -62,11 +68,11 @@ const toRole = (role: string): UserRole => {
   }
 }
 
-const userSelect = `
+const userSelect = (source: string) => `
   SELECT u.id::text AS id, u.username, coalesce(r.name, 'employee') AS role,
          u.full_name AS "fullName", u.email, u.phone_number AS "phone",
          u.date_of_birth::text AS "dateOfBirth", u.department
-  FROM "user".users u
+  FROM ${source} u
   LEFT JOIN LATERAL (
     SELECT roles.name
     FROM role.account_roles ar
@@ -77,7 +83,18 @@ const userSelect = `
   ) r ON TRUE
 `
 
-export class PostgresAuthRepository implements AuthRepository {
+const toAuthUser = (row: UserRow): AuthUser => ({
+  id: row.id,
+  username: row.username,
+  role: toRole(row.role),
+  fullName: row.fullName,
+  email: row.email,
+  phone: row.phone,
+  dateOfBirth: row.dateOfBirth,
+  department: row.department,
+})
+
+export class PostgresAuthRepository implements AuthRepository, UserRepository {
   private readonly pool: Pool
 
   constructor(pool: Pool) {
@@ -135,23 +152,45 @@ export class PostgresAuthRepository implements AuthRepository {
 
   async findUserById(id: string): Promise<AuthUser | null> {
     const result = await this.pool.query<UserRow>(
-      `${userSelect} WHERE u.id = $1 AND u.is_active = TRUE LIMIT 1`,
+      `${userSelect('"user".users')} WHERE u.id = $1 AND u.is_active = TRUE LIMIT 1`,
       [id],
     )
     const row = result.rows[0]
 
-    return row
-      ? {
-          id: row.id,
-          username: row.username,
-          role: toRole(row.role),
-          fullName: row.fullName,
-          email: row.email,
-          phone: row.phone,
-          dateOfBirth: row.dateOfBirth,
-          department: row.department,
-        }
-      : null
+    return row ? toAuthUser(row) : null
+  }
+
+  async listUsers(): Promise<AuthUser[]> {
+    const result = await this.pool.query<UserRow>(
+      `${userSelect('"user".users')} ORDER BY u.full_name, u.id`,
+    )
+
+    return result.rows.map(toAuthUser)
+  }
+
+  async updateUserProfile(id: string, input: UpdateProfileInput): Promise<AuthUser | null> {
+    try {
+      const result = await this.pool.query<UserRow>(
+        `WITH updated AS (
+           UPDATE "user".users
+           SET full_name = $2, email = $3, phone_number = $4,
+               department = $5, date_of_birth = $6
+           WHERE id = $1
+           RETURNING *
+         )
+         ${userSelect('updated')}`,
+        [id, input.fullName, input.email, input.phone, input.department, input.dateOfBirth],
+      )
+      const row = result.rows[0]
+
+      return row ? toAuthUser(row) : null
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictError('That email address is already used by another account.')
+      }
+
+      throw error
+    }
   }
 
   async createAccount(account: NewAccount): Promise<AuthAccount> {
