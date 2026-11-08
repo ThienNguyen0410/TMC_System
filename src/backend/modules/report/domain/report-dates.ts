@@ -1,7 +1,6 @@
 import type { DateRange } from './attendance-report.ts'
 
 const DAY_MS = 86_400_000
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/
 
 const toUtcMs = (date: string): number => {
   const [year, month, day] = date.split('-').map(Number)
@@ -9,11 +8,6 @@ const toUtcMs = (date: string): number => {
 }
 
 const fromUtcMs = (ms: number): string => new Date(ms).toISOString().slice(0, 10)
-
-export function isValidIsoDate(value: string): boolean {
-  // The round trip rejects dates that overflow, such as 2026-02-30.
-  return ISO_DATE.test(value) && fromUtcMs(toUtcMs(value)) === value
-}
 
 export function daysBetween(range: DateRange): number {
   return (toUtcMs(range.endDate) - toUtcMs(range.startDate)) / DAY_MS

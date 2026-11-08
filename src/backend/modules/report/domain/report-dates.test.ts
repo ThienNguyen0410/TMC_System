@@ -3,19 +3,10 @@ import { test } from 'node:test'
 import {
   daysBetween,
   eachDate,
-  isValidIsoDate,
   isValidTimeZone,
   isWeekend,
   todayIn,
 } from './report-dates.ts'
-
-test('isValidIsoDate accepts real calendar dates only', () => {
-  assert.equal(isValidIsoDate('2026-11-07'), true)
-  assert.equal(isValidIsoDate('2024-02-29'), true)
-  assert.equal(isValidIsoDate('2026-02-30'), false)
-  assert.equal(isValidIsoDate('2026-2-3'), false)
-  assert.equal(isValidIsoDate('abc'), false)
-})
 
 test('daysBetween and eachDate treat both ends as inclusive', () => {
   const range = { startDate: '2026-11-02', endDate: '2026-11-08' }
