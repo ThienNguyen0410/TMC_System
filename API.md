@@ -98,6 +98,51 @@ The role comes from the request — the current UI depends on that. In a real de
 
 ---
 
+## POST /api/auth/forgot-password
+
+Sends a password-reset link to the account's email address.
+
+| Field   | Type   | Rules                         |
+| ------- | ------ | ----------------------------- |
+| `email` | string | valid email, max 100 chars    |
+
+```http
+POST /api/auth/forgot-password
+Content-Type: application/json
+
+{ "email": "employee01@example.com" }
+```
+
+`202 Accepted` with an empty body — **always**, whether or not the address belongs to an active account. Nothing is sent for unknown or deactivated accounts, so the response must not be used to test whether an email is registered.
+
+A new link invalidates the previous unused link for that account. The link points at `{APP_BASE_URL}/reset-password?token=...` and expires after `PASSWORD_RESET_TTL_MINUTES` (default 30). Delivery is real SMTP (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`MAIL_FROM`); when SMTP is not configured the API logs the failure and still answers `202`.
+
+Errors: `400 VALIDATION_ERROR` for a malformed email.
+
+---
+
+## POST /api/auth/reset-password
+
+Consumes a reset link, sets the new password, and revokes every refresh token for the account.
+
+| Field      | Type   | Rules                                                |
+| ---------- | ------ | ---------------------------------------------------- |
+| `token`    | string | the raw token from the emailed link                  |
+| `password` | string | 8+ chars with lowercase, uppercase, digit and symbol |
+
+```http
+POST /api/auth/reset-password
+Content-Type: application/json
+
+{ "token": "3Nq...", "password": "NewSecret123!" }
+```
+
+`204 No Content`
+
+Errors: `400 VALIDATION_ERROR` — weak password, or the token is unknown, already used, or expired (`"This reset link is invalid or has expired."`). Reset tokens are single-use; a second attempt with the same token fails.
+
+---
+
 ## POST /api/auth/login
 
 | Field      | Type   | Rules                              |

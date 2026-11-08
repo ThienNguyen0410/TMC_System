@@ -5,7 +5,9 @@ import type {
   AuthCredentials,
   AuthRepository,
   NewAccount,
+  NewPasswordReset,
   NewRefreshToken,
+  PasswordResetRecord,
   RefreshTokenRecord,
 } from './auth.repository.ts'
 
@@ -37,6 +39,13 @@ interface RefreshTokenRow {
   userId: string
   expiresAt: Date
   revokedAt: Date | null
+}
+
+interface PasswordResetRow {
+  id: string
+  userId: string
+  expiresAt: Date
+  usedAt: Date | null
 }
 
 const toRole = (role: string): UserRole => {
@@ -110,6 +119,18 @@ export class PostgresAuthRepository implements AuthRepository {
           department: row.department,
         }
       : null
+  }
+
+  async findActiveUserIdByEmail(email: string): Promise<string | null> {
+    const result = await this.pool.query<{ id: string }>(
+      `SELECT id::text AS id
+       FROM "user".users
+       WHERE lower(email) = lower($1) AND is_active = TRUE
+       LIMIT 1`,
+      [email],
+    )
+
+    return result.rows[0]?.id ?? null
   }
 
   async findUserById(id: string): Promise<AuthUser | null> {
@@ -250,5 +271,76 @@ export class PostgresAuthRepository implements AuthRepository {
        WHERE token_hash = $1 AND revoked_at IS NULL`,
       [tokenHash],
     )
+  }
+
+  async createPasswordReset(reset: NewPasswordReset): Promise<void> {
+    await this.pool.query(
+      `WITH discarded AS (
+         UPDATE "user".password_resets
+         SET used_at = NOW()
+         WHERE user_id = $1 AND used_at IS NULL
+       )
+       INSERT INTO "user".password_resets (user_id, token_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [reset.userId, reset.tokenHash, reset.expiresAt],
+    )
+  }
+
+  async findPasswordReset(tokenHash: string): Promise<PasswordResetRecord | null> {
+    const result = await this.pool.query<PasswordResetRow>(
+      `SELECT id::text AS id, user_id::text AS "userId",
+              expires_at AS "expiresAt", used_at AS "usedAt"
+       FROM "user".password_resets
+       WHERE token_hash = $1
+       LIMIT 1`,
+      [tokenHash],
+    )
+
+    return result.rows[0] ?? null
+  }
+
+  async consumePasswordReset(resetId: string, passwordHash: string): Promise<boolean> {
+    const client = await this.pool.connect()
+
+    try {
+      await client.query('BEGIN')
+
+      const consumed = await client.query<{ userId: string }>(
+        `UPDATE "user".password_resets
+         SET used_at = NOW()
+         WHERE id = $1 AND used_at IS NULL AND expires_at > NOW()
+         RETURNING user_id::text AS "userId"`,
+        [resetId],
+      )
+
+      if (consumed.rowCount !== 1) {
+        await client.query('ROLLBACK')
+        return false
+      }
+
+      const userId = consumed.rows[0].userId
+
+      await client.query(
+        `UPDATE "user".users
+         SET password_hash = $2, password_changed_at = NOW()
+         WHERE id = $1`,
+        [userId, passwordHash],
+      )
+
+      await client.query(
+        `UPDATE "user".refresh_tokens
+         SET revoked_at = NOW()
+         WHERE user_id = $1 AND revoked_at IS NULL`,
+        [userId],
+      )
+
+      await client.query('COMMIT')
+      return true
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined)
+      throw error
+    } finally {
+      client.release()
+    }
   }
 }

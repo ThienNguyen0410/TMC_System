@@ -40,7 +40,14 @@ const accounts = new Map([
 ])
 const authService = new AuthService(
   { findUserById: async (id: string) => accounts.get(id) ?? null } as unknown as AuthRepository,
-  { accessTokenSecret: SECRET, accessTokenTtlSeconds: 60, refreshTokenTtlDays: 7 },
+  {
+    accessTokenSecret: SECRET,
+    accessTokenTtlSeconds: 60,
+    refreshTokenTtlDays: 7,
+    appBaseUrl: 'http://localhost:5173',
+    passwordResetTtlMinutes: 30,
+  },
+  { sendPasswordReset: async () => undefined },
 )
 
 const tokenFor = (id: string, role: UserRole) =>

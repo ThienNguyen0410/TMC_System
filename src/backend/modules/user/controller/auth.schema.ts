@@ -64,3 +64,19 @@ export const registerSchema = z.object({
     .transform((value) => roleAliases[value] ?? value)
     .pipe(z.enum(userRoles, { error: 'Select a valid role.' })),
 })
+
+export const forgotPasswordSchema = z.object({
+  email: z
+    .string({ error: 'Email is required.' })
+    .trim()
+    .toLowerCase()
+    .max(100, 'Email must be 100 characters or fewer.')
+    .email('Please enter a valid email address.'),
+})
+
+export const resetPasswordSchema = z.object({
+  token: z.string({ error: 'Reset token is required.' }).trim().min(1, 'Reset token is required.'),
+  password: z
+    .string({ error: 'Password is required.' })
+    .regex(passwordPolicy, 'Include uppercase, lowercase, number, and symbol.'),
+})

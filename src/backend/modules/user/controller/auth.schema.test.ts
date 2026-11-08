@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { loginSchema, registerSchema } from './auth.schema.ts'
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from './auth.schema.ts'
 
 const validInput = {
   fullName: '  Nguyen Van An  ',
@@ -80,5 +80,30 @@ test('rejects missing or blank login credentials', () => {
 
   for (const input of invalidInputs) {
     assert.equal(loginSchema.safeParse(input).success, false, JSON.stringify(input))
+  }
+})
+
+test('accepts and normalizes a forgot-password email', () => {
+  const result = forgotPasswordSchema.safeParse({ email: '  Employee01@Example.com ' })
+
+  assert.ok(result.success)
+  assert.equal(result.data.email, 'employee01@example.com')
+})
+
+test('rejects invalid forgot-password and reset-password input', () => {
+  const invalidForgot = [{}, { email: '' }, { email: 'not-an-email' }]
+  const invalidReset = [
+    {},
+    { password: 'Secret123!' },
+    { token: '   ', password: 'Secret123!' },
+    { token: 'token', password: 'weakpassword' },
+  ]
+
+  for (const input of invalidForgot) {
+    assert.equal(forgotPasswordSchema.safeParse(input).success, false, JSON.stringify(input))
+  }
+
+  for (const input of invalidReset) {
+    assert.equal(resetPasswordSchema.safeParse(input).success, false, JSON.stringify(input))
   }
 })

@@ -2,7 +2,7 @@ import type { CookieOptions, Request, Response } from 'express'
 import { env } from '../../../config/env.ts'
 import { ValidationError } from '../../../shared/errors/app-error.ts'
 import type { AuthService, AuthSession } from '../service/auth.service.ts'
-import { loginSchema, registerSchema } from './auth.schema.ts'
+import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from './auth.schema.ts'
 
 const REFRESH_COOKIE = 'refresh_token'
 const REFRESH_COOKIE_PATH = '/api/auth'
@@ -53,6 +53,30 @@ export class AuthController {
         user,
       },
     })
+  }
+
+  async forgotPassword(request: Request, response: Response): Promise<void> {
+    const parsed = forgotPasswordSchema.safeParse(request.body)
+
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Please enter a valid email address.')
+    }
+
+    await this.authService.requestPasswordReset(parsed.data.email)
+
+    response.status(202).end()
+  }
+
+  async resetPassword(request: Request, response: Response): Promise<void> {
+    const parsed = resetPasswordSchema.safeParse(request.body)
+
+    if (!parsed.success) {
+      throw new ValidationError(parsed.error.issues[0]?.message ?? 'Invalid password reset details')
+    }
+
+    await this.authService.resetPassword(parsed.data.token, parsed.data.password)
+
+    response.status(204).end()
   }
 
   async refresh(request: Request, response: Response): Promise<void> {

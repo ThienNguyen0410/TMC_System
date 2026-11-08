@@ -3,6 +3,7 @@ import cors from 'cors'
 import express from 'express'
 import { pool } from '../database/config.ts'
 import { env } from './config/env.ts'
+import { NodemailerPasswordResetMailer } from './infrastructure/external/mail/nodemailer-password-reset-mailer.ts'
 import { AttendanceReportController } from './modules/report/controller/attendance-report.ts'
 import { todayIn } from './modules/report/domain/report-dates.ts'
 import { PostgresAttendanceReportRepository } from './modules/report/repository/postgres-attendance-report.repository.ts'
@@ -16,11 +17,18 @@ import { errorHandler, notFoundHandler } from './shared/http/error-handler.ts'
 
 export const createApp = () => {
   const authRepository = new PostgresAuthRepository(pool)
-  const authService = new AuthService(authRepository, {
-    accessTokenSecret: env.jwtAccessSecret,
-    accessTokenTtlSeconds: env.accessTokenTtlSeconds,
-    refreshTokenTtlDays: env.refreshTokenTtlDays,
-  })
+  const passwordResetMailer = new NodemailerPasswordResetMailer(env.smtp, env.mailFrom)
+  const authService = new AuthService(
+    authRepository,
+    {
+      accessTokenSecret: env.jwtAccessSecret,
+      accessTokenTtlSeconds: env.accessTokenTtlSeconds,
+      refreshTokenTtlDays: env.refreshTokenTtlDays,
+      appBaseUrl: env.appBaseUrl,
+      passwordResetTtlMinutes: env.passwordResetTtlMinutes,
+    },
+    passwordResetMailer,
+  )
   const authController = new AuthController(authService)
 
   const today = () => todayIn(env.reportTimeZone)

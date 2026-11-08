@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { AuthenticationError, ConflictError } from '../../../shared/errors/app-error.ts'
+import { AuthenticationError, ConflictError, ValidationError } from '../../../shared/errors/app-error.ts'
 import { hashPassword, verifyPassword } from '../../../shared/security/password.ts'
 import { hashToken, verifyAccessToken } from '../../../shared/security/tokens.ts'
 import type { AuthAccount, AuthUser, RegisterInput } from '../domain/auth-user.ts'
+import type { PasswordResetMailer } from '../mailer/password-reset-mailer.ts'
 import type {
   AuthCredentials,
   AuthRepository,
   NewAccount,
+  NewPasswordReset,
   NewRefreshToken,
+  PasswordResetRecord,
   RefreshTokenRecord,
 } from '../repository/auth.repository.ts'
 import { AuthService } from './auth.service.ts'
@@ -17,6 +20,8 @@ const config = {
   accessTokenSecret: 'test-secret',
   accessTokenTtlSeconds: 60,
   refreshTokenTtlDays: 7,
+  appBaseUrl: 'http://localhost:5173',
+  passwordResetTtlMinutes: 30,
 }
 
 const registerInput: RegisterInput = {
@@ -33,6 +38,7 @@ class FakeAuthRepository implements AuthRepository {
   credentials: AuthCredentials | null = null
   users = new Map<string, AuthUser>()
   tokens: Array<RefreshTokenRecord & { tokenHash: string }> = []
+  resets: Array<PasswordResetRecord & { tokenHash: string }> = []
   created: NewAccount | null = null
   private nextId = 1
 
@@ -84,10 +90,66 @@ class FakeAuthRepository implements AuthRepository {
       token.revokedAt = new Date()
     }
   }
+
+  async findActiveUserIdByEmail(email: string): Promise<string | null> {
+    const account = this.credentials
+
+    return account && account.isActive && account.email?.toLowerCase() === email ? account.id : null
+  }
+
+  async createPasswordReset(reset: NewPasswordReset): Promise<void> {
+    for (const existing of this.resets) {
+      if (existing.userId === reset.userId && !existing.usedAt) {
+        existing.usedAt = new Date()
+      }
+    }
+
+    this.resets.push({ id: String(this.nextId++), usedAt: null, ...reset })
+  }
+
+  async findPasswordReset(tokenHash: string): Promise<PasswordResetRecord | null> {
+    return this.resets.find((reset) => reset.tokenHash === tokenHash) ?? null
+  }
+
+  async consumePasswordReset(resetId: string, passwordHash: string): Promise<boolean> {
+    const reset = this.resets.find(
+      (candidate) => candidate.id === resetId && !candidate.usedAt && candidate.expiresAt > new Date(),
+    )
+
+    if (!reset) {
+      return false
+    }
+
+    reset.usedAt = new Date()
+
+    if (this.credentials) {
+      this.credentials.passwordHash = passwordHash
+    }
+
+    for (const token of this.tokens) {
+      token.revokedAt ??= new Date()
+    }
+
+    return true
+  }
+}
+
+class FakePasswordResetMailer implements PasswordResetMailer {
+  sent: Array<{ to: string; link: string; ttlMinutes: number }> = []
+  fail = false
+
+  async sendPasswordReset(to: string, link: string, ttlMinutes: number): Promise<void> {
+    if (this.fail) {
+      throw new Error('SMTP unreachable')
+    }
+
+    this.sent.push({ to, link, ttlMinutes })
+  }
 }
 
 const setup = async (overrides: Partial<AuthCredentials> = {}) => {
   const repository = new FakeAuthRepository()
+  const mailer = new FakePasswordResetMailer()
   const passwordHash = await hashPassword('Secret123!')
   const credentials: AuthCredentials = {
     id: '1',
@@ -115,7 +177,7 @@ const setup = async (overrides: Partial<AuthCredentials> = {}) => {
     department: credentials.department,
   })
 
-  return { repository, service: new AuthService(repository, config) }
+  return { repository, mailer, service: new AuthService(repository, config, mailer) }
 }
 
 test('logs in with a valid password and issues both tokens', async () => {
@@ -243,4 +305,83 @@ test('propagates repository conflicts', async () => {
   }
 
   await assert.rejects(service.register(registerInput), ConflictError)
+})
+
+const resetTokenFrom = (mail: { link: string }): string => {
+  const token = new URL(mail.link).searchParams.get('token')
+  assert.ok(token)
+  return token
+}
+
+test('emails a single-use reset link for a registered address', async () => {
+  const { repository, mailer, service } = await setup()
+
+  await service.requestPasswordReset(' Employee01@Example.com ')
+
+  assert.equal(mailer.sent.length, 1)
+  assert.equal(mailer.sent[0].to, 'employee01@example.com')
+  assert.equal(mailer.sent[0].ttlMinutes, 30)
+  assert.equal(repository.resets.length, 1)
+  assert.equal(repository.resets[0].tokenHash, hashToken(resetTokenFrom(mailer.sent[0])))
+  assert.ok(repository.resets[0].expiresAt > new Date())
+})
+
+test('silently ignores unknown and inactive addresses', async () => {
+  const { repository, mailer, service } = await setup({ isActive: false })
+
+  await service.requestPasswordReset('nobody@example.com')
+  await service.requestPasswordReset('employee01@example.com')
+
+  assert.equal(repository.resets.length, 0)
+  assert.equal(mailer.sent.length, 0)
+})
+
+test('still resolves when the mail server fails', async () => {
+  const { mailer, service } = await setup()
+  const errorLog = console.error
+  mailer.fail = true
+  console.error = () => undefined
+
+  try {
+    await service.requestPasswordReset('employee01@example.com')
+  } finally {
+    console.error = errorLog
+  }
+
+  assert.equal(mailer.sent.length, 0)
+})
+
+test('resets the password and revokes existing sessions', async () => {
+  const { repository, mailer, service } = await setup()
+  const session = await service.login('employee01', 'Secret123!')
+
+  await service.requestPasswordReset('employee01@example.com')
+  await service.resetPassword(resetTokenFrom(mailer.sent[0]), 'NewSecret1!')
+
+  await assert.rejects(service.login('employee01', 'Secret123!'), AuthenticationError)
+  await service.login('employee01', 'NewSecret1!')
+  assert.ok(repository.credentials)
+  assert.ok(await verifyPassword('NewSecret1!', repository.credentials.passwordHash))
+  await assert.rejects(service.refresh(session.refreshToken), AuthenticationError)
+})
+
+test('rejects an already used or expired reset token', async () => {
+  const { repository, mailer, service } = await setup()
+
+  await service.requestPasswordReset('employee01@example.com')
+  const token = resetTokenFrom(mailer.sent[0])
+  await service.resetPassword(token, 'NewSecret1!')
+  await assert.rejects(service.resetPassword(token, 'OtherSecret1!'), ValidationError)
+
+  await service.requestPasswordReset('employee01@example.com')
+  const expired = resetTokenFrom(mailer.sent[1])
+  repository.resets[1].expiresAt = new Date(Date.now() - 1000)
+
+  await assert.rejects(service.resetPassword(expired, 'OtherSecret1!'), ValidationError)
+})
+
+test('rejects an unknown reset token without hashing the password', async () => {
+  const { service } = await setup()
+
+  await assert.rejects(service.resetPassword('not-a-real-token', 'NewSecret1!'), ValidationError)
 })

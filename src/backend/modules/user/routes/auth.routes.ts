@@ -8,6 +8,8 @@ export const createAuthRouter = (controller: AuthController, authService: AuthSe
 
   router.post('/login', (request, response) => controller.login(request, response))
   router.post('/register', (request, response) => controller.register(request, response))
+  router.post('/forgot-password', (request, response) => controller.forgotPassword(request, response))
+  router.post('/reset-password', (request, response) => controller.resetPassword(request, response))
   router.post('/refresh', (request, response) => controller.refresh(request, response))
   router.post('/logout', (request, response) => controller.logout(request, response))
   router.get('/me', requireAuth(authService), (request, response) =>
