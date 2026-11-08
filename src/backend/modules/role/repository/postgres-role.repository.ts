@@ -37,10 +37,12 @@ const roleSelect = `
   ORDER BY r.name
 `
 
-// Reads the role exactly like the user module does (first role by name), so both modules agree.
-const userRoleSelect = `
-  SELECT u.id::text AS "userId", u.username, u.is_active AS "isActive",
-         coalesce(r.name, 'employee') AS role
+// The role every module agrees on: the user's first role by name (as the user module reads it),
+// and anything other than admin counts as employee. Permissions are derived from this role too,
+// so what the API reports and what the user may do can never disagree.
+const effectiveRoleSelect = `
+  SELECT u.id, u.username, u.is_active,
+         CASE WHEN r.name = 'admin' THEN 'admin' ELSE 'employee' END AS role
   FROM "user".users u
   LEFT JOIN LATERAL (
     SELECT roles.name
@@ -51,6 +53,19 @@ const userRoleSelect = `
     LIMIT 1
   ) r ON TRUE
   WHERE u.id = $1::bigint
+`
+
+const userRoleSelect = `
+  SELECT e.id::text AS "userId", e.username, e.is_active AS "isActive", e.role
+  FROM (${effectiveRoleSelect}) e
+`
+
+const userPermissionCodesSelect = `
+  SELECT p.code
+  FROM (${effectiveRoleSelect}) e
+  JOIN role.roles r ON r.name = e.role
+  JOIN role.role_permissions rp ON rp.role_id = r.id
+  JOIN role.permissions p ON p.id = rp.permission_id
 `
 
 const toAssignment = (row: UserRoleRow): UserRoleAssignment => ({
@@ -69,13 +84,7 @@ export class PostgresRoleRepository implements RoleRepository, PermissionChecker
 
   async hasPermission(userId: string, permissionCode: string): Promise<boolean> {
     const result = await this.pool.query<{ allowed: boolean }>(
-      `SELECT EXISTS (
-         SELECT 1
-         FROM role.account_roles ar
-         JOIN role.role_permissions rp ON rp.role_id = ar.role_id
-         JOIN role.permissions p ON p.id = rp.permission_id
-         WHERE ar.account_id = $1::bigint AND p.code = $2
-       ) AS allowed`,
+      `SELECT EXISTS (${userPermissionCodesSelect} WHERE p.code = $2) AS allowed`,
       [userId, permissionCode],
     )
 
@@ -127,12 +136,7 @@ export class PostgresRoleRepository implements RoleRepository, PermissionChecker
 
   async findPermissionCodesByUserId(userId: string): Promise<string[]> {
     const result = await this.pool.query<{ code: string }>(
-      `SELECT DISTINCT p.code
-       FROM role.account_roles ar
-       JOIN role.role_permissions rp ON rp.role_id = ar.role_id
-       JOIN role.permissions p ON p.id = rp.permission_id
-       WHERE ar.account_id = $1::bigint
-       ORDER BY p.code`,
+      `${userPermissionCodesSelect} ORDER BY p.code`,
       [userId],
     )
 
