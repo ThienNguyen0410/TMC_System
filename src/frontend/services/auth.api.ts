@@ -135,6 +135,21 @@ export async function registerAccount(input: RegisterInput): Promise<void> {
   })
 }
 
+// Always answers 202, whether or not the address belongs to an account.
+export async function requestPasswordReset(email: string): Promise<void> {
+  await request('/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await request('/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, password }),
+  })
+}
+
 // For endpoints that need the access token. An expired token gets one refresh and one retry.
 export async function authorizedFetch(
   path: string,

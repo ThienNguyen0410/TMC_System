@@ -3,36 +3,39 @@ import { Alert, Button, Form, Input, Result, Space } from 'antd'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../../components/layout/AuthLayout'
-import { useAuth } from '../../hooks/useAuth'
-import { delay } from '../../utils/async'
+import { requestPasswordReset } from '../../services/auth.api'
 
 interface ForgotPasswordFormValues {
   email: string
 }
 
-type RecoveryStatus = 'idle' | 'success' | 'error'
-
 export default function ForgotPasswordPage() {
   const [form] = Form.useForm<ForgotPasswordFormValues>()
   const [submitting, setSubmitting] = useState(false)
-  const [status, setStatus] = useState<RecoveryStatus>('idle')
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [submittedEmail, setSubmittedEmail] = useState('')
-  const { isEmailRegistered } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (values: ForgotPasswordFormValues) => {
+    const email = values.email.trim()
     setSubmitting(true)
-    setStatus('idle')
-    await delay(600)
+    setError(null)
 
-    const normalizedEmail = values.email.trim()
-    setSubmittedEmail(normalizedEmail)
-    setStatus(isEmailRegistered(normalizedEmail) ? 'success' : 'error')
-    setSubmitting(false)
+    try {
+      await requestPasswordReset(email)
+      setSubmittedEmail(email)
+      setSent(true)
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Unable to send the email.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const resetForm = () => {
-    setStatus('idle')
+    setSent(false)
+    setError(null)
     setSubmittedEmail('')
     form.resetFields()
   }
@@ -40,19 +43,19 @@ export default function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Forgot your password?"
-      subtitle="Enter the email address linked to your employee account and we will simulate sending recovery instructions."
+      subtitle="Enter the email address linked to your employee account and we will email you a link to reset your password."
       footer={
         <span>
           Remembered it? <Link to="/login">Back to sign in</Link>
         </span>
       }
     >
-      {status === 'success' ? (
+      {sent ? (
         <div className="auth-result">
           <Result
             status="success"
-            title="Recovery instructions sent"
-            subTitle={`If ${submittedEmail} belongs to an account, password recovery instructions would be sent there.`}
+            title="Check your inbox"
+            subTitle={`If ${submittedEmail} belongs to an account, we sent a password reset link to it.`}
             extra={
               <Space direction="vertical" size={8}>
                 <Button type="primary" onClick={() => navigate('/login')}>
@@ -65,20 +68,20 @@ export default function ForgotPasswordPage() {
             }
           />
           <p className="auth-note">
-            UI demonstration only: no email is sent and no password is changed.
+            The link can be used once. If it has expired, request a new one from this page.
           </p>
         </div>
       ) : (
         <>
-          {status === 'error' && (
+          {error && (
             <Alert
               className="auth-alert"
               type="error"
               showIcon
-              title="No account found"
-              description={`We could not find an account linked to ${submittedEmail}. Check the address and try again.`}
+              title="Could not send the email"
+              description={error}
               closable
-              onClose={() => setStatus('idle')}
+              onClose={() => setError(null)}
             />
           )}
           <Form
@@ -113,13 +116,10 @@ export default function ForgotPasswordPage() {
                 icon={<SendOutlined />}
                 block
               >
-                Send recovery instructions
+                Send reset link
               </Button>
             </div>
           </Form>
-          <p className="auth-note">
-            Demo email addresses include employee01@example.com and admin01@example.com.
-          </p>
         </>
       )}
     </AuthLayout>

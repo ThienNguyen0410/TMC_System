@@ -202,14 +202,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [allAccounts, deletedUserIds],
   )
 
-  const isEmailRegistered = useCallback(
-    (email: string): boolean => {
-      const normalizedEmail = email.trim().toLowerCase()
-      return allAccounts.some((account) => account.email.toLowerCase() === normalizedEmail)
-    },
-    [allAccounts],
-  )
-
   const value: AuthContextValue = {
     currentUser,
     isRestoring,
@@ -219,7 +211,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     register,
     updateProfile,
     deleteUser,
-    isEmailRegistered,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

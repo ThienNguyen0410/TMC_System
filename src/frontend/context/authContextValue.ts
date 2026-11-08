@@ -16,7 +16,6 @@ export interface AuthContextValue {
   register: (input: RegisterInput) => Promise<RegisterResult>
   updateProfile: (userId: string, input: ProfileUpdateInput) => AppUser | null
   deleteUser: (userId: string) => boolean
-  isEmailRegistered: (email: string) => boolean
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)
