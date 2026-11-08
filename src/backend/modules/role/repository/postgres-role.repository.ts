@@ -222,12 +222,18 @@ export class PostgresRoleRepository implements RoleRepository, PermissionChecker
       await client.query('BEGIN')
       const result = await work(client)
       await client.query('COMMIT')
+      client.release()
       return result
     } catch (error) {
-      await client.query('ROLLBACK')
+      try {
+        await client.query('ROLLBACK')
+        client.release()
+      } catch (rollbackError) {
+        // The connection is broken: passing the error makes the pool discard it instead of reusing it.
+        client.release(rollbackError as Error)
+      }
+      // Always surface the original failure, not the rollback's.
       throw error
-    } finally {
-      client.release()
     }
   }
 }
