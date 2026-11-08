@@ -17,7 +17,7 @@ interface AuthApiErrorPayload {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 const accountRoles: readonly AccountRole[] = [
   'employee',
@@ -33,11 +33,11 @@ let accessToken: string | null = null
 // React StrictMode mounts twice in dev; two concurrent rotations would revoke each other.
 let pendingRefresh: Promise<AuthApiUser | null> | null = null
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function readErrorMessage(payload: unknown): string | null {
+export function readErrorMessage(payload: unknown): string | null {
   if (!isRecord(payload)) {
     return null
   }
@@ -133,6 +133,21 @@ export async function registerAccount(input: RegisterInput): Promise<void> {
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+// For endpoints that need the access token. An expired token gets one refresh and one retry.
+export async function authorizedFetch(
+  path: string,
+  init: Omit<RequestInit, 'headers'> = {},
+): Promise<Response> {
+  const send = () =>
+    fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    })
+
+  const response = await send()
+  return response.status === 401 && (await refreshSession()) ? send() : response
 }
 
 export function refreshSession(): Promise<AuthApiUser | null> {

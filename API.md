@@ -26,6 +26,7 @@ Failure is always wrapped in `error`:
 | 400    | `VALIDATION_ERROR`    | A field failed validation            |
 | 400    | `INVALID_JSON`        | Body is not valid JSON               |
 | 401    | `INVALID_CREDENTIALS` | Bad login, missing/expired token     |
+| 403    | `FORBIDDEN`           | Signed in, but the role is not allowed |
 | 404    | `NOT_FOUND`           | No such route                        |
 | 409    | `CONFLICT`            | Username or email already registered |
 | 500    | `INTERNAL_ERROR`      | Unexpected server error              |
@@ -188,6 +189,69 @@ Revokes the refresh token from the cookie and clears it. No request body.
 
 ---
 
+## GET /api/reports/attendance
+
+Attendance report, one record per employee per day. **Admin only**: `401` without a valid token, `403 FORBIDDEN` for any other role (the role is read from the database).
+
+Query parameters, all optional:
+
+| Parameter              | Meaning                                                                  |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `date`                 | A single day, `YYYY-MM-DD`.                                              |
+| `startDate`, `endDate` | An inclusive range, `YYYY-MM-DD`, sent together, at most 366 days.       |
+| `status`               | `present`, `late`, `absent` or `incomplete`.                             |
+
+With none of the date parameters the report is for today. `date` cannot be combined with a range. An empty value counts as missing. Days are cut in `REPORT_TIME_ZONE` (default `Asia/Ho_Chi_Minh`).
+
+```json
+{
+  "data": {
+    "filter": { "startDate": "2026-11-04", "endDate": "2026-11-04" },
+    "records": [
+      {
+        "employeeId": "5",
+        "fullName": "Tran Thi B",
+        "username": "ttb",
+        "department": "Sales",
+        "date": "2026-11-04",
+        "checkIn": "09:30:00",
+        "checkOut": "17:00:00",
+        "status": "late",
+        "workingHours": 7.5
+      }
+    ]
+  }
+}
+```
+
+`checkIn` and `checkOut` are the earliest check-in and latest check-out of the day (`HH:mm:ss`), or `null`. `workingHours` is decimal hours, or `null` when either end is missing.
+
+Status rules:
+
+- `absent`: no events. Only generated for active employees on Monday to Friday, up to today.
+- `incomplete`: only a check-in or a check-out, or the check-out is before the check-in.
+- `late`: first check-in is after `REPORT_LATE_AFTER` (default `09:00:00`).
+- `present`: everything else.
+
+Records are sorted by date, then full name.
+
+Errors: `400 VALIDATION_ERROR` (bad date, unknown status, range longer than 366 days, ...), `401`, `403`.
+
+---
+
+## GET /api/reports/attendance/export
+
+Same access rules and query parameters as above, returned as a CSV download (`text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="tmc-attendance-report-<startDate>_<endDate>.csv"`).
+
+- UTF-8 with a byte order mark, so Excel reads Vietnamese names correctly. Lines end with CRLF.
+- Columns: `Employee ID, Full Name, Username, Department, Date, Check-in Time, Check-out Time, Attendance Status, Working Hours`.
+- A cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'`, so a spreadsheet never runs it as a formula.
+- No records still returns the header row.
+
+Download it with the access token, for example `fetch` + `blob()`; a plain link cannot send the `Authorization` header.
+
+---
+
 ## Frontend usage
 
 ```ts
@@ -241,4 +305,4 @@ Notes:
 
 ### Current frontend gap
 
-`src/frontend/services/auth.api.ts` wires login, register, logout and refresh; the session (including the profile fields above) is restored from `/refresh` on boot and the access token is kept in memory. `GET /api/auth/me` is implemented but not called by the frontend. Profile edit, delete and forgot-password are still `localStorage` mocks.
+`src/frontend/services/auth.api.ts` wires login, register, logout and refresh; the session (including the profile fields above) is restored from `/refresh` on boot and the access token is kept in memory. `GET /api/auth/me` is implemented but not called by the frontend. Profile edit, delete and forgot-password are still `localStorage` mocks. The admin Statistics page is the first screen that calls an authenticated endpoint (`services/report.api.ts` through `authorizedFetch`, which refreshes an expired access token once).
