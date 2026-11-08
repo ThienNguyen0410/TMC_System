@@ -11,6 +11,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons'
 import {
+  Alert,
   App as AntdApp,
   Avatar,
   Badge,
@@ -24,18 +25,18 @@ import {
   Space,
   Table,
   Tag,
+  Tooltip,
   type TableProps,
 } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
-import { ConfirmModal } from '../../components/common/ConfirmModal'
 import { EmptyState } from '../../components/common/EmptyState'
-import { useAuth } from '../../hooks/useAuth'
+import { fetchUsers, updateUserProfile, type ManagedUser } from '../../services/user.api'
 import type { AppUser } from '../../types/auth'
-import { delay } from '../../utils/async'
-import { getInitials, getRoleLabel } from '../../utils/user'
+import { avatarColorFor, getInitials, getRoleLabel } from '../../utils/user'
 
-type ManagementModal = 'view' | 'update' | 'delete'
+type ManagementModal = 'view' | 'update'
+type EmployeeRow = Omit<AppUser, 'qrCode'>
 
 interface ManagementFormValues {
   fullName: string
@@ -43,6 +44,20 @@ interface ManagementFormValues {
   phone: string
   department: string
   dateOfBirth: Dayjs
+}
+
+function toEmployeeRow(user: ManagedUser): EmployeeRow {
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    username: user.username,
+    email: user.email ?? '',
+    phone: user.phone ?? '',
+    dateOfBirth: user.dateOfBirth ?? '',
+    department: user.department ?? '',
+    role: user.role,
+    avatarColor: avatarColorFor(user.username),
+  }
 }
 
 function displayValue(value: string): string {
@@ -54,16 +69,55 @@ function formatDateOfBirth(value: string): string {
 }
 
 export default function ManagementPage() {
-  const { users, updateProfile, deleteUser } = useAuth()
   const { message } = AntdApp.useApp()
   const [form] = Form.useForm<ManagementFormValues>()
+  const [accounts, setAccounts] = useState<EmployeeRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedUser, setSelectedUser] = useState<AppUser | null>(null)
+  const [selectedUser, setSelectedUser] = useState<EmployeeRow | null>(null)
   const [modalMode, setModalMode] = useState<ManagementModal | null>(null)
   const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
-  const employees = useMemo(() => users.filter((user) => user.role === 'employee'), [users])
+  // Bumping the token refetches; the first render already starts with token 0.
+  const [reloadToken, setReloadToken] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    fetchUsers(controller.signal)
+      .then((users) => {
+        if (controller.signal.aborted) {
+          return
+        }
+        setAccounts(users.map(toEmployeeRow))
+        setLoadError(null)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return
+        }
+        setLoadError(error instanceof Error ? error.message : 'Unable to load employee accounts.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [reloadToken])
+
+  const retryLoad = () => {
+    setLoading(true)
+    setLoadError(null)
+    setReloadToken((current) => current + 1)
+  }
+
+  const employees = useMemo(
+    () => accounts.filter((account) => account.role === 'employee'),
+    [accounts],
+  )
 
   const filteredEmployees = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -94,12 +148,12 @@ export default function ManagementPage() {
         email: selectedUser.email,
         phone: selectedUser.phone,
         department: selectedUser.department,
-        dateOfBirth: dayjs(selectedUser.dateOfBirth),
+        dateOfBirth: selectedUser.dateOfBirth ? dayjs(selectedUser.dateOfBirth) : undefined,
       })
     }
   }, [form, modalMode, selectedUser])
 
-  const openModal = (user: AppUser, mode: ManagementModal) => {
+  const openModal = (user: EmployeeRow, mode: ManagementModal) => {
     setSelectedUser(user)
     setModalMode(mode)
   }
@@ -115,48 +169,33 @@ export default function ManagementPage() {
     }
 
     setSaving(true)
-    await delay(350)
 
-    const updated = updateProfile(selectedUser.id, {
-      fullName: values.fullName.trim(),
-      email: values.email.trim(),
-      phone: values.phone.trim(),
-      department: values.department.trim(),
-      dateOfBirth: values.dateOfBirth.format('YYYY-MM-DD'),
-    })
+    try {
+      const updated = await updateUserProfile(selectedUser.id, {
+        fullName: values.fullName.trim(),
+        email: values.email.trim(),
+        phone: values.phone.trim(),
+        department: values.department.trim(),
+        dateOfBirth: values.dateOfBirth.format('YYYY-MM-DD'),
+      })
 
-    setSaving(false)
-
-    if (!updated) {
-      message.error('The employee account could not be updated. Please try again.')
-      return
+      setAccounts((current) =>
+        current.map((account) =>
+          account.id === updated.id ? toEmployeeRow(updated) : account,
+        ),
+      )
+      message.success(`Updated the account for ${updated.fullName}.`)
+      closeModal()
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : 'The employee account could not be updated.',
+      )
+    } finally {
+      setSaving(false)
     }
-
-    message.success(`Updated the account for ${updated.fullName}.`)
-    closeModal()
   }
 
-  const handleDelete = async () => {
-    if (!selectedUser) {
-      return
-    }
-
-    setDeleting(true)
-    await delay(350)
-
-    const deleted = deleteUser(selectedUser.id)
-    setDeleting(false)
-
-    if (!deleted) {
-      message.error('The employee account could not be deleted. Please try again.')
-      return
-    }
-
-    message.success(`Deleted the account for ${selectedUser.fullName}.`)
-    closeModal()
-  }
-
-  const columns: TableProps<AppUser>['columns'] = [
+  const columns: TableProps<EmployeeRow>['columns'] = [
     {
       title: 'Employee',
       key: 'employee',
@@ -183,7 +222,7 @@ export default function ManagementPage() {
       dataIndex: 'id',
       key: 'id',
       width: 130,
-      sorter: (left, right) => left.id.localeCompare(right.id),
+      sorter: (left, right) => Number(left.id) - Number(right.id),
       render: (value: string) => <span className="mono">{value}</span>,
     },
     {
@@ -212,7 +251,7 @@ export default function ManagementPage() {
       dataIndex: 'role',
       key: 'role',
       width: 120,
-      render: () => <Tag color="blue">{getRoleLabel('employee')}</Tag>,
+      render: (role: EmployeeRow['role']) => <Tag color="blue">{getRoleLabel(role)}</Tag>,
     },
     {
       title: 'Actions',
@@ -236,15 +275,13 @@ export default function ManagementPage() {
           >
             Update
           </Button>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => openModal(employee, 'delete')}
-          >
-            Delete
-          </Button>
+          <Tooltip title="Deleting accounts is not available yet.">
+            <span>
+              <Button type="link" size="small" danger disabled icon={<DeleteOutlined />}>
+                Delete
+              </Button>
+            </span>
+          </Tooltip>
         </Space>
       ),
     },
@@ -276,6 +313,21 @@ export default function ManagementPage() {
           </div>
         }
       >
+        {loadError && (
+          <Alert
+            type="error"
+            showIcon
+            title="Could not load employee accounts"
+            description={loadError}
+            action={
+              <Button size="small" onClick={retryLoad}>
+                Retry
+              </Button>
+            }
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         <div className="management-toolbar">
           <Input
             className="management-toolbar__search"
@@ -304,6 +356,7 @@ export default function ManagementPage() {
           className="management-table"
           columns={columns}
           dataSource={filteredEmployees}
+          loading={loading}
           scroll={{ x: 1320 }}
           pagination={{
             pageSize: 8,
@@ -495,25 +548,6 @@ export default function ManagementPage() {
           </p>
         </Form>
       </Modal>
-
-      <ConfirmModal
-        open={modalMode === 'delete'}
-        title="Delete employee account?"
-        description={
-          selectedUser && (
-            <p>
-              You are about to delete <strong>{selectedUser.fullName}</strong> (@
-              {selectedUser.username}). This employee account will no longer appear in the
-              management table.
-            </p>
-          )
-        }
-        confirmText="Delete account"
-        danger
-        loading={deleting}
-        onConfirm={handleDelete}
-        onCancel={closeModal}
-      />
     </>
   )
 }

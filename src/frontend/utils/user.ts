@@ -23,3 +23,11 @@ const roleLabels: Record<AccountRole, string> = {
 export function getRoleLabel(role: AccountRole): string {
   return roleLabels[role]
 }
+
+// Stable colour per account, so the same username always gets the same avatar.
+export function avatarColorFor(username: string): string {
+  const palette = ['#2563eb', '#0f766e', '#7c3aed', '#b45309', '#be123c', '#0369a1']
+  const sum = Array.from(username).reduce((total, character) => total + character.charCodeAt(0), 0)
+
+  return palette[sum % palette.length]
+}

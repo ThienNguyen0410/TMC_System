@@ -46,7 +46,7 @@ export function readErrorMessage(payload: unknown): string | null {
   return typeof error?.message === 'string' ? error.message : null
 }
 
-function readNullableString(value: unknown): string | null {
+export function readNullableString(value: unknown): string | null {
   return typeof value === 'string' ? value : null
 }
 
@@ -153,12 +153,15 @@ export async function resetPassword(token: string, password: string): Promise<vo
 // For endpoints that need the access token. An expired token gets one refresh and one retry.
 export async function authorizedFetch(
   path: string,
-  init: Omit<RequestInit, 'headers'> = {},
+  init: RequestInit = {},
 ): Promise<Response> {
   const send = () =>
     fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      headers: {
+        ...(init.headers as Record<string, string> | undefined),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
     })
 
   const response = await send()

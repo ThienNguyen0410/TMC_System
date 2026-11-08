@@ -15,12 +15,11 @@ import type {
   RegisterInput,
   RegisterResult,
 } from '../types/auth'
+import { avatarColorFor } from '../utils/user'
 import { AuthContext, type AuthContextValue } from './authContextValue'
 
 const PROFILE_OVERRIDES_KEY = 'tmc.mock.profile-overrides'
 const DELETED_USERS_KEY = 'tmc.mock.deleted-users'
-
-const avatarPalette = ['#2563eb', '#0f766e', '#7c3aed', '#b45309', '#be123c', '#0369a1']
 
 function readStorage<T>(key: string, fallback: T): T {
   try {
@@ -55,10 +54,6 @@ function toPublicUser(user: MockUser, override?: ProfileUpdateInput): AppUser {
 }
 
 function toSessionUser(account: AuthApiUser): AppUser {
-  const colorIndex =
-    Array.from(account.username).reduce((total, character) => total + character.charCodeAt(0), 0) %
-    avatarPalette.length
-
   return {
     id: account.id,
     fullName: account.fullName,
@@ -69,7 +64,7 @@ function toSessionUser(account: AuthApiUser): AppUser {
     role: account.role,
     department: account.department ?? '',
     qrCode: `TMC-QR-${account.id}-${account.username.toUpperCase()}`,
-    avatarColor: avatarPalette[colorIndex],
+    avatarColor: avatarColorFor(account.username),
   }
 }
 
