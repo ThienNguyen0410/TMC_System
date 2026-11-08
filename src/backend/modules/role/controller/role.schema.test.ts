@@ -37,3 +37,8 @@ test('replaceRolePermissionsSchema accepts a list of codes', () => {
   })
   assert.equal(replaceRolePermissionsSchema.safeParse({ permissionCodes: 'report.view' }).success, false)
 })
+
+test('updateRoleSchema stores a blank description as null', () => {
+  assert.deepEqual(updateRoleSchema.parse({ description: '' }), { description: null })
+  assert.deepEqual(updateRoleSchema.parse({ description: '   ' }), { description: null })
+})

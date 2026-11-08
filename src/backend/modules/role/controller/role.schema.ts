@@ -12,6 +12,8 @@ export const updateRoleSchema = z.object(
       .string({ error: 'description must be a string or null' })
       .trim()
       .max(500, 'description must be 500 characters or fewer')
+      // A blank description means "no description", stored as null like an explicit null.
+      .transform((value) => (value === '' ? null : value))
       .nullable(),
   },
   { error: 'Request body must be a JSON object' },
