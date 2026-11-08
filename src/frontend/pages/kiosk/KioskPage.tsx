@@ -7,18 +7,32 @@ import {
   QrcodeOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
-import { Avatar, Button } from 'antd'
+import { Avatar, Button, Tag } from 'antd'
 import dayjs from 'dayjs'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AttendanceStatusTag } from '../../components/common/AttendanceStatusTag'
 import { BrandLogo } from '../../components/common/BrandLogo'
 import { useClock } from '../../hooks/useClock'
 import { useAuth } from '../../hooks/useAuth'
-import type { AppUser } from '../../types/auth'
-import type { AttendanceStatus } from '../../types/attendance'
+import { useQrScanner } from '../../hooks/useQrScanner'
+import { AttendanceApiError, submitAttendanceScan } from '../../services/attendance.api'
+import type { AttendanceEventType, AttendanceLocationPayload } from '../../types/attendance'
 import { formatClock, formatDisplayDate, formatKioskDate } from '../../utils/date'
+import { getCurrentLocation } from '../../utils/geolocation'
 import { getInitials } from '../../utils/user'
+
+const QR_SCANNER_ELEMENT_ID = 'kiosk-qr-scanner'
+
+const KIOSK_GATE_ID = (() => {
+  const rawGateId = import.meta.env.VITE_KIOSK_GATE_ID as string | undefined
+
+  if (!rawGateId) {
+    return null
+  }
+
+  const gateId = Number(rawGateId)
+  return Number.isInteger(gateId) && gateId > 0 ? gateId : null
+})()
 
 type KioskMode =
   | 'scanning'
@@ -29,43 +43,50 @@ type KioskMode =
   | 'unavailable'
 
 interface ScanResult {
-  user: AppUser
+  employeeName: string
+  employeeCode: string
+  department: string | null
+  eventType: AttendanceEventType
   date: string
   time: string
-  status: AttendanceStatus
 }
 
 interface ResultPanelProps {
   mode: Exclude<KioskMode, 'scanning'>
   result: ScanResult | null
+  errorMessage: string | null
   onRetry: () => void
 }
 
-function ResultPanel({ mode, result, onRetry }: ResultPanelProps) {
+function ResultPanel({ mode, result, errorMessage, onRetry }: ResultPanelProps) {
   if (mode === 'success' && result) {
-    const firstName = result.user.fullName.trim().split(/\s+/).pop() ?? result.user.fullName
+    const firstName = result.employeeName.trim().split(/\s+/).pop() ?? result.employeeName
+    const isCheckIn = result.eventType === 'CHECK_IN'
+    const eventLabel = isCheckIn ? 'Check-in' : 'Check-out'
 
     return (
       <div className="kiosk-result kiosk-result--success" aria-live="polite">
         <span className="kiosk-result__icon">
           <CheckCircleFilled />
         </span>
-        <span className="kiosk-result__eyebrow">Check-in recorded</span>
+        <span className="kiosk-result__eyebrow">{eventLabel} recorded</span>
         <h2>Welcome, {firstName}.</h2>
         <p className="kiosk-result__message">
-          Attendance recorded successfully at {result.time}. Have a productive day.
+          Attendance recorded successfully at {result.time}.{' '}
+          {isCheckIn ? 'Have a productive day.' : 'See you next time.'}
         </p>
         <div className="kiosk-result__card">
-          <Avatar size={46} style={{ backgroundColor: result.user.avatarColor }}>
-            {getInitials(result.user.fullName)}
+          <Avatar size={46} style={{ backgroundColor: '#2563eb' }}>
+            {getInitials(result.employeeName)}
           </Avatar>
           <div className="kiosk-result__identity">
-            <strong>{result.user.fullName}</strong>
+            <strong>{result.employeeName}</strong>
             <span>
-              @{result.user.username} · {result.user.id}
+              {result.employeeCode}
+              {result.department ? ` · ${result.department}` : ''}
             </span>
           </div>
-          <AttendanceStatusTag status={result.status} />
+          <Tag color={isCheckIn ? 'green' : 'blue'}>{eventLabel}</Tag>
         </div>
         <span className="kiosk-result__date">{formatDisplayDate(result.date)}</span>
         <div className="kiosk-result__actions">
@@ -86,8 +107,8 @@ function ResultPanel({ mode, result, onRetry }: ResultPanelProps) {
         <span className="kiosk-result__eyebrow">Scan unsuccessful</span>
         <h2>Invalid QR code</h2>
         <p className="kiosk-result__message">
-          This code is not linked to a TMC employee account. Please present your personal
-          attendance QR code.
+          {errorMessage ??
+            'This code is invalid, expired, or has already been used. Please present a freshly generated attendance QR code.'}
         </p>
         <div className="kiosk-result__actions">
           <Button type="primary" size="large" icon={<ReloadOutlined />} onClick={onRetry}>
@@ -105,10 +126,10 @@ function ResultPanel({ mode, result, onRetry }: ResultPanelProps) {
           <ExclamationCircleFilled />
         </span>
         <span className="kiosk-result__eyebrow">Scan unsuccessful</span>
-        <h2>QR code scanning failed</h2>
+        <h2>Attendance was not recorded</h2>
         <p className="kiosk-result__message">
-          We could not read the code. Hold it steady, increase the screen brightness, and try
-          again.
+          {errorMessage ??
+            'We could not complete the attendance request. Hold the code steady and try again.'}
         </p>
         <div className="kiosk-result__actions">
           <Button type="primary" size="large" icon={<ReloadOutlined />} onClick={onRetry}>
@@ -135,9 +156,6 @@ function ResultPanel({ mode, result, onRetry }: ResultPanelProps) {
           <Button type="primary" size="large" icon={<ReloadOutlined />} onClick={onRetry}>
             Try again
           </Button>
-          <Button size="large" onClick={onRetry}>
-            Use demo mode
-          </Button>
         </div>
       </div>
     )
@@ -151,15 +169,11 @@ function ResultPanel({ mode, result, onRetry }: ResultPanelProps) {
       <span className="kiosk-result__eyebrow">Hardware check</span>
       <h2>Camera unavailable</h2>
       <p className="kiosk-result__message">
-        No working camera was detected. Check the camera connection, or continue with the simulated
-        scanner.
+        No working camera was detected. Check the camera connection and try again.
       </p>
       <div className="kiosk-result__actions">
         <Button type="primary" size="large" icon={<ReloadOutlined />} onClick={onRetry}>
           Try again
-        </Button>
-        <Button size="large" onClick={onRetry}>
-          Use demo mode
         </Button>
       </div>
     </div>
@@ -168,7 +182,7 @@ function ResultPanel({ mode, result, onRetry }: ResultPanelProps) {
 
 export default function KioskPage() {
   const now = useClock()
-  const { users, currentUser } = useAuth()
+  const { currentUser } = useAuth()
   const exitPath = currentUser
     ? currentUser.role === 'admin'
       ? '/admin/dashboard'
@@ -176,32 +190,95 @@ export default function KioskPage() {
     : '/login'
   const [mode, setMode] = useState<KioskMode>('scanning')
   const [result, setResult] = useState<ScanResult | null>(null)
-  const [scanIndex, setScanIndex] = useState(0)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const locationRef = useRef<AttendanceLocationPayload | null>(null)
 
-  const employees = users.filter((user) => user.role === 'employee')
+  const handleDecodedQr = useCallback(async (decodedText: string) => {
+    const token = decodedText.trim()
 
-  const handleValidScan = () => {
-    if (employees.length === 0) {
-      setMode('failed')
+    if (!token) {
+      setErrorMessage('The scanned QR code did not contain an attendance token.')
+      setMode('invalid')
       return
     }
 
-    const employee = employees[scanIndex % employees.length]
-    const minutesOfDay = now.getHours() * 60 + now.getMinutes()
-    const status: AttendanceStatus = minutesOfDay <= 8 * 60 + 30 ? 'present' : 'late'
+    setErrorMessage(null)
+    const location = locationRef.current
 
-    setScanIndex((index) => index + 1)
-    setResult({
-      user: employee,
-      date: dayjs(now).format('YYYY-MM-DD'),
-      time: dayjs(now).format('HH:mm'),
-      status,
+    try {
+      const attendance = await submitAttendanceScan({
+        token,
+        gateId: KIOSK_GATE_ID,
+        location,
+      })
+      const recordedAt = dayjs(attendance.recordedAt)
+
+      setResult({
+        employeeName: attendance.employeeName,
+        employeeCode: attendance.employeeCode,
+        department: attendance.department,
+        eventType: attendance.eventType,
+        date: recordedAt.format('YYYY-MM-DD'),
+        time: recordedAt.format('HH:mm'),
+      })
+      setMode('success')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to record attendance.'
+      setErrorMessage(message)
+
+      if (error instanceof AttendanceApiError && error.code === 'INVALID_QR_CODE') {
+        setMode('invalid')
+        return
+      }
+
+      setMode('failed')
+    }
+  }, [])
+
+  const handleScannerError = useCallback((scannerError: string) => {
+    setMode(scannerError === 'permission-denied' ? 'permission-denied' : 'unavailable')
+  }, [])
+
+  const { startScanner, stopScanner, isScanning } = useQrScanner({
+    elementId: QR_SCANNER_ELEMENT_ID,
+    onScanSuccess: handleDecodedQr,
+    onError: handleScannerError,
+  })
+
+  useEffect(() => {
+    if (mode !== 'scanning') return
+
+    // Delay the start by one tick so React Strict Mode does not open the camera twice.
+    const startTimer = window.setTimeout(() => {
+      void startScanner()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(startTimer)
+      void stopScanner()
+    }
+  }, [mode, startScanner, stopScanner])
+
+  useEffect(() => {
+    if (mode !== 'scanning') return
+
+    let active = true
+    locationRef.current = null
+
+    void getCurrentLocation().then((location) => {
+      if (active) {
+        locationRef.current = location
+      }
     })
-    setMode('success')
-  }
+
+    return () => {
+      active = false
+    }
+  }, [mode])
 
   const handleRetry = () => {
     setResult(null)
+    setErrorMessage(null)
     setMode('scanning')
   }
 
@@ -229,49 +306,42 @@ export default function KioskPage() {
           <div className="kiosk-camera__hud">
             <span className="kiosk-camera__badge">
               <i className="kiosk-camera__live-dot" />
-              Camera feed · Demo
+              Camera feed · Live
             </span>
             <span className="kiosk-camera__badge kiosk-camera__badge--muted">TMC Entrance</span>
           </div>
 
           {mode === 'scanning' ? (
-            <button
-              type="button"
-              className="kiosk-scanner"
-              onClick={handleValidScan}
-              aria-label="Simulate scanning an employee QR code"
-            >
-              <span className="kiosk-scanner__frame">
-                <span className="kiosk-scanner__corner kiosk-scanner__corner--tl" />
-                <span className="kiosk-scanner__corner kiosk-scanner__corner--tr" />
-                <span className="kiosk-scanner__corner kiosk-scanner__corner--bl" />
-                <span className="kiosk-scanner__corner kiosk-scanner__corner--br" />
-                <span className="kiosk-scanner__line" />
-                <QrcodeOutlined className="kiosk-scanner__placeholder" />
-              </span>
+            <div className="kiosk-scanner kiosk-scanner--live">
+              <div className="kiosk-scanner__viewport">
+                <div id={QR_SCANNER_ELEMENT_ID} className="kiosk-scanner__camera" />
+                <span className="kiosk-scanner__line" aria-hidden="true" />
+              </div>
               <span className="kiosk-scanner__status">
                 <i className="kiosk-scanner__pulse" />
-                Scanning for QR code
+                {isScanning ? 'Scanning for QR code' : 'Starting camera…'}
               </span>
               <strong className="kiosk-scanner__title">Hold your QR code inside the frame</strong>
               <span className="kiosk-scanner__hint">
-                The scanner detects your code automatically. Tap the frame to simulate a valid scan.
+                The scanner detects your code automatically and sends it to the attendance server.
               </span>
-            </button>
+            </div>
           ) : (
-            <ResultPanel mode={mode} result={result} onRetry={handleRetry} />
+            <ResultPanel
+              mode={mode}
+              result={result}
+              errorMessage={errorMessage}
+              onRetry={handleRetry}
+            />
           )}
         </section>
 
         <div className="kiosk-demo">
           <div className="kiosk-demo__label">
             <strong>Demo controls</strong>
-            <span>Simulate scanner responses for UI testing.</span>
+            <span>Simulate scanner states for UI testing.</span>
           </div>
           <div className="kiosk-demo__actions">
-            <Button size="large" onClick={handleValidScan}>
-              Valid scan
-            </Button>
             <Button size="large" onClick={() => setMode('invalid')}>
               Invalid QR
             </Button>
@@ -289,7 +359,7 @@ export default function KioskPage() {
       </main>
 
       <footer className="kiosk-footer">
-        TMC Attendance Kiosk · Camera simulation mode · No data is sent to a server
+        TMC Attendance Kiosk · Live camera mode · Attendance events are recorded by the TMC server
       </footer>
     </div>
   )

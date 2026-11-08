@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS attendance.attendance_records (
     event_type VARCHAR(20) NOT NULL,
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     source VARCHAR(30) NOT NULL DEFAULT 'QR',
-
+    locations JSON not NULL,
     CONSTRAINT chk_attendance_event_type
         CHECK (event_type IN ('CHECK_IN', 'CHECK_OUT'))
 );

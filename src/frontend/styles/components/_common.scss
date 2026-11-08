@@ -383,6 +383,36 @@
   color: $color-text-soft;
 }
 
+.qr-modal__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $space-3;
+  width: 224px;
+  min-height: 224px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  text-align: center;
+  color: $color-text-muted;
+
+  &--error {
+    width: 320px;
+  }
+
+  &--expired strong {
+    font-size: 1rem;
+    color: $color-danger;
+  }
+}
+
+.qr-modal__countdown {
+  margin-top: $space-3;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $color-warning;
+}
+
 .status-tag {
   min-width: 78px;
   margin-inline-end: 0;

@@ -1,0 +1,2 @@
+export const QR_CODE_TTL_SECONDS = 5
+export const ATTENDANCE_COOLDOWN_SECONDS = 10
