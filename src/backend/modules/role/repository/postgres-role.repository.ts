@@ -187,7 +187,9 @@ export class PostgresRoleRepository implements RoleRepository, PermissionChecker
         [userId],
       )
 
-      guard(current, admins.rows[0]?.count ?? 0)
+      if (!guard(current, admins.rows[0]?.count ?? 0)) {
+        return current
+      }
 
       await client.query(`DELETE FROM role.account_roles WHERE account_id = $1::bigint`, [userId])
       await client.query(

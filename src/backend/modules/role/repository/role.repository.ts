@@ -2,9 +2,12 @@ import type { Permission, Role, RoleName, UserRoleAssignment } from '../domain/r
 
 /**
  * Runs inside the role-change transaction with freshly locked data.
- * Throwing aborts the change.
+ * Throwing aborts the change; returning false keeps the current role without writing.
  */
-export type RoleChangeGuard = (current: UserRoleAssignment, otherActiveAdminCount: number) => void
+export type RoleChangeGuard = (
+  current: UserRoleAssignment,
+  otherActiveAdminCount: number,
+) => boolean
 
 export interface RoleRepository {
   listPermissions(): Promise<Permission[]>
@@ -20,8 +23,8 @@ export interface RoleRepository {
   findUserRole(userId: string): Promise<UserRoleAssignment | null>
   /**
    * In one transaction: lock the user and admin assignments, call the guard with the current
-   * assignment and the number of other active admins, then set the user's single role.
-   * Returns null when the user does not exist.
+   * assignment and the number of other active admins, then set the user's single role when the
+   * guard allows it. Returns the resulting assignment, or null when the user does not exist.
    */
   changeUserRole(
     userId: string,

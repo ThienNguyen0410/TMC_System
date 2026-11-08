@@ -90,7 +90,13 @@ export class RoleService {
     const updated = await this.repository.changeUserRole(userId, newRole, (locked, otherActiveAdminCount) => {
       // Re-checked on locked data: the account may have changed since the first read.
       this.assertActive(locked)
+
+      if (locked.role === newRole) {
+        return false
+      }
+
       this.policy.assertCanChange({ actorId, target: locked, newRole, otherActiveAdminCount })
+      return true
     })
 
     if (!updated) {

@@ -50,6 +50,9 @@ class FakeRoleRepository implements RoleRepository {
     ['4', { userId: '4', username: 'admin02', role: 'admin', isActive: true }],
   ])
   changeUserRoleCalls = 0
+  roleWrites = 0
+  /** Simulates another request committing between the service's first read and the lock. */
+  beforeLock?: () => void
 
   async listPermissions(): Promise<Permission[]> {
     return this.permissions
@@ -94,6 +97,7 @@ class FakeRoleRepository implements RoleRepository {
     guard: RoleChangeGuard,
   ): Promise<UserRoleAssignment | null> {
     this.changeUserRoleCalls += 1
+    this.beforeLock?.()
     const user = this.users.get(userId)
 
     if (!user) {
@@ -105,7 +109,11 @@ class FakeRoleRepository implements RoleRepository {
         candidate.userId !== userId && candidate.isActive && candidate.role === 'admin',
     ).length
 
-    guard({ ...user }, otherActiveAdminCount)
+    if (!guard({ ...user }, otherActiveAdminCount)) {
+      return { ...user }
+    }
+
+    this.roleWrites += 1
     user.role = newRole
     return { ...user }
   }
@@ -191,6 +199,21 @@ test('changeUserRole to the same role is a no-op', async () => {
 
   assert.equal(result.role, 'employee')
   assert.equal(repository.changeUserRoleCalls, 0)
+})
+
+test('changeUserRole succeeds without writing when a concurrent request already set the role', async () => {
+  const { repository, service } = setup()
+  repository.beforeLock = () => {
+    const target = repository.users.get('2')
+    if (target) {
+      target.role = 'admin'
+    }
+  }
+
+  const result = await service.changeUserRole('4', '2', 'admin')
+
+  assert.equal(result.role, 'admin')
+  assert.equal(repository.roleWrites, 0)
 })
 
 test('changeUserRole applies the policy', async () => {
