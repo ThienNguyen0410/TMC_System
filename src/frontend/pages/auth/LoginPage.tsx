@@ -5,7 +5,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AuthLayout } from '../../components/layout/AuthLayout'
 import { useAuth } from '../../hooks/useAuth'
 import { demoAdminAccount, demoEmployeeAccount } from '../../mocks/users'
-import { delay } from '../../utils/async'
 
 interface LoginFormValues {
   username: string
@@ -23,19 +22,8 @@ export default function LoginPage() {
   const handleSubmit = async (values: LoginFormValues) => {
     setSubmitting(true)
     setError(null)
-    await delay(700)
 
     const result = await login(values.username, values.password)
-
-    if (values.username === "employee01" && values.password === "Employee123!") {
-      navigate('/employee/dashboard', {replace: true})
-      return
-    }
-
-    if (values.username === "admin01" && values.password === "Admin123!") {
-      navigate('/admin/dashboard', {replace: true})
-      return
-    }
 
     if (!result.ok || !result.user) {
       setError(result.error ?? 'Sign in failed. Please try again.')

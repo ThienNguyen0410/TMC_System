@@ -1,19 +1,47 @@
-export type UserRole = 'employee' | 'admin'
+export type UserRole =
+  | 'employee'
+  | 'production_supervisor'
+  | 'hr'
+  | 'security_guard'
+  | 'admin'
+  | 'executive_management'
 
 export interface AuthAccount {
   id: string
   username: string
 }
 
-export interface AuthUser extends AuthAccount {
+export interface AuthProfile {
+  fullName: string
+  email: string | null
+  phone: string | null
+  dateOfBirth: string | null
+  department: string | null
+}
+
+export interface AuthIdentity extends AuthAccount {
   role: UserRole
 }
 
-const roleByUsername: Record<string, UserRole> = {
-  employee01: 'employee',
-  admin01: 'admin',
+export interface AuthUser extends AuthAccount, AuthProfile {
+  role: UserRole
 }
 
-export function resolveUserRole(username: string): UserRole {
-  return roleByUsername[username.trim().toLowerCase()] ?? 'employee'
+// The part of an account an administrator may edit. Username and role are not here.
+export interface UpdateProfileInput {
+  fullName: string
+  email: string
+  phone: string
+  dateOfBirth: string
+  department: string
+}
+
+export interface RegisterInput {
+  fullName: string
+  username: string
+  password: string
+  email: string
+  phone: string
+  dateOfBirth: string
+  role: UserRole
 }

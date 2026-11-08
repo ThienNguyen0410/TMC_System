@@ -9,13 +9,13 @@ import type {
 
 export interface AuthContextValue {
   currentUser: AppUser | null
+  isRestoring: boolean
   users: AppUser[]
   login: (username: string, password: string) => Promise<LoginResult>
   signOut: () => void
-  register: (input: RegisterInput) => RegisterResult
+  register: (input: RegisterInput) => Promise<RegisterResult>
   updateProfile: (userId: string, input: ProfileUpdateInput) => AppUser | null
   deleteUser: (userId: string) => boolean
-  isEmailRegistered: (email: string) => boolean
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

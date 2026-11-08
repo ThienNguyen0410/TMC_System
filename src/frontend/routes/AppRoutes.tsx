@@ -9,6 +9,7 @@ import { ProtectedRoute } from './ProtectedRoute'
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const SignUpPage = lazy(() => import('../pages/auth/SignUpPage'))
 const ForgotPasswordPage = lazy(() => import('../pages/auth/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('../pages/auth/ResetPasswordPage'))
 const KioskPage = lazy(() => import('../pages/kiosk/KioskPage'))
 const EmployeeDashboardPage = lazy(() => import('../pages/employee/EmployeeDashboardPage'))
 const EmployeeProfilePage = lazy(() => import('../pages/employee/EmployeeProfilePage'))
@@ -34,6 +35,12 @@ function HomeRedirect() {
 }
 
 export function AppRoutes() {
+  const { isRestoring } = useAuth()
+
+  if (isRestoring) {
+    return <PageLoading />
+  }
+
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
@@ -41,12 +48,13 @@ export function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignUpPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/kiosk" element={<KioskPage />} />
 
         <Route
           path="/employee"
           element={
-            <ProtectedRoute role="employee">
+            <ProtectedRoute area="employee">
               <EmployeeLayout />
             </ProtectedRoute>
           }
@@ -59,7 +67,7 @@ export function AppRoutes() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute role="admin">
+            <ProtectedRoute area="admin">
               <AdminLayout />
             </ProtectedRoute>
           }

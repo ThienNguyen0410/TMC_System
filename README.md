@@ -4,7 +4,7 @@ TMC System is an employee attendance management application for an enterprise en
 
 The current implementation focuses on authentication. Login credentials are checked against the `"user".test_account` table in PostgreSQL. The application does not use JWT. After a successful login, the frontend stores the current user session in local storage and redirects the user according to their role.
 
-The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. These screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
+The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. The administrator statistics page reads attendance records and exports CSV from the backend report API; the other screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
 
 ## Tech Stack
 
@@ -66,37 +66,39 @@ DB_PASSWORD=<your_db_password>
 | `DB_NAME` | Database name. |
 | `DB_USER` | PostgreSQL user. |
 | `DB_PASSWORD` | Password of the PostgreSQL user. |
+| `REPORT_TIME_ZONE` | Optional. IANA time zone that decides which local day an attendance event belongs to. Defaults to `Asia/Ho_Chi_Minh`. |
+| `REPORT_LATE_AFTER` | Optional. Check-ins after this `HH:mm:ss` time count as late. Defaults to `09:00:00`. |
 
 Do not commit the `.env` file to Git. Replace `<your_db_password>` with the password of your local PostgreSQL account.
 
 ## Database Setup
 
-### 1. Create the database
+PostgreSQL runs in Docker; nothing needs to be installed locally.
 
-Using `psql`:
+### 1. Configure the environment
 
-```powershell
-psql -U postgres -c "CREATE DATABASE \"TMC_DB\";"
-```
+Copy `.env.example` to `.env` and set `DB_PASSWORD`. The defaults already match the Compose setup (`DB_PORT=5432`, `DB_NAME=TMC_DB`, `DB_USER=postgres`).
 
-Alternatively, create a database named `TMC_DB` with pgAdmin.
-
-### 2. Create the schemas, tables, and seed data
+### 2. Start the database and create the schema
 
 From the project root:
 
-```powershell
-psql -U postgres -d TMC_DB -f src/database/TMC_db.sql
+```bash
+npm run db:up        # docker compose up -d --wait db
+npm run db:migrate   # applies src/database/migrations
 ```
 
-The SQL file creates the following schemas:
+The migrations create the schemas `"user"`, `role`, `attendance`, `report`, the tables used by the application, and the demo accounts.
 
-- `"user"`
-- `role`
-- `attendance`
-- `report`
+Useful commands:
 
-It also creates the tables used by the application and inserts demo accounts into `"user".test_account`.
+| Command | Effect |
+| --- | --- |
+| `npm run db:down` | Stops the container, keeps the data volume. |
+| `npm run db:reset` | **Destroys all data**, recreates the container, and migrates. |
+| `npm run db:new -- <name>` | Creates the next migration file. |
+
+`src/database/TMC_db.sql` is a historical snapshot; do not run it manually — migration `0001_baseline.sql` reproduces it.
 
 ### Seeded Login Accounts
 
@@ -177,7 +179,7 @@ The Vite development server proxies requests starting with `/api` to the backend
 | `npm run lint` | Runs oxlint on the project. |
 | `npm run preview` | Previews the frontend production build. |
 
-Note: the current working tree does not contain the backend `attendance` and `report` module implementations, but the legacy HR/Payroll adapters still import their types. Because of this, the backend TypeScript step of `npm run build` may fail. The development commands `npm run dev` and `npm run api` are not affected.
+Note: the current working tree does not contain the backend `attendance` module implementation, but the legacy HR/Payroll adapters still import their types. Because of this, the backend TypeScript step of `npm run build` may fail. The development commands `npm run dev` and `npm run api` are not affected.
 
 ## API Endpoints
 
@@ -185,6 +187,8 @@ Note: the current working tree does not contain the backend `attendance` and `re
 | --- | --- | --- |
 | `GET` | `/api/health` | Health check endpoint. |
 | `POST` | `/api/auth/login` | Validates credentials against `"user".test_account`. |
+| `GET` | `/api/reports/attendance` | Admin only. Attendance records as JSON. Query: `date`, or `startDate` + `endDate` (`YYYY-MM-DD`, at most 366 days), and optional `status`. See `API.md`. |
+| `GET` | `/api/reports/attendance/export` | Admin only. Same filters, returned as a CSV download. |
 
 ### Login Request
 
@@ -246,7 +250,7 @@ TMC_System/
 │   │   │           └── logging-hr-payroll.gateway.ts
 │   │   ├── modules/
 │   │   │   ├── attendance/              # currently empty
-│   │   │   ├── report/                  # currently empty
+│   │   │   ├── report/                  # attendance report + CSV export
 │   │   │   ├── role/                    # currently empty
 │   │   │   └── user/
 │   │   │       ├── controller/
