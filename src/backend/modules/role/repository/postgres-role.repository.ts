@@ -149,22 +149,28 @@ export class PostgresRoleRepository implements RoleRepository, PermissionChecker
     guard: RoleChangeGuard,
   ): Promise<UserRoleAssignment | null> {
     return this.withTransaction(async (client) => {
-      const locked = await client.query(`SELECT id FROM "user".users WHERE id = $1::bigint FOR UPDATE`, [
-        userId,
-      ])
-
-      if (locked.rowCount === 0) {
-        return null
-      }
-
-      // Serialises concurrent role changes so two admins cannot both step down at once.
+      // Locks every admin first: the role rows stop two admins stepping down at once, and the
+      // user rows stop an admin being deactivated while we count who is still active.
+      // Taken before the target lock so every role change acquires locks in the same order.
       await client.query(
         `SELECT ar.account_id
          FROM role.account_roles ar
          JOIN role.roles r ON r.id = ar.role_id
+         JOIN "user".users u ON u.id = ar.account_id
          WHERE r.name = 'admin'
-         FOR UPDATE OF ar`,
+         ORDER BY ar.account_id
+         FOR UPDATE OF ar FOR SHARE OF u`,
       )
+
+      // NO KEY UPDATE serialises changes to this user without blocking inserts that reference it.
+      const locked = await client.query(
+        `SELECT id FROM "user".users WHERE id = $1::bigint FOR NO KEY UPDATE`,
+        [userId],
+      )
+
+      if (locked.rowCount === 0) {
+        return null
+      }
 
       const current = await this.queryUserRole(client, userId)
 
