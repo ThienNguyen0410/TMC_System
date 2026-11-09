@@ -1,4 +1,4 @@
-import { EditOutlined, QrcodeOutlined } from '@ant-design/icons'
+import { QrcodeOutlined } from '@ant-design/icons'
 import { Avatar, Badge, Button, Card, Descriptions, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
