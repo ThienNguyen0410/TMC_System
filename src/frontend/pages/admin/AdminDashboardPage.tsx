@@ -5,29 +5,93 @@ import {
   TeamOutlined,
   UserDeleteOutlined,
 } from '@ant-design/icons'
-import { Button, Card, Progress, Table, type TableProps } from 'antd'
-import { useMemo } from 'react'
+import { Alert, Button, Card, Progress, Table, type TableProps } from 'antd'
+import dayjs from 'dayjs'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AttendanceStatusTag } from '../../components/common/AttendanceStatusTag'
 import { StatCard } from '../../components/common/StatCard'
 import { AttendanceTrendChart } from '../../components/dashboard/AttendanceTrendChart'
-import { useAuth } from '../../hooks/useAuth'
-import { mockAttendanceRecords } from '../../mocks/attendance'
-import { buildDailyTrend, computeTodayStats, getRecentActivity } from '../../mocks/statistics'
+import { fetchAttendanceReport, type ReportFilter } from '../../services/report.api'
+import { fetchUsers, type ManagedUser } from '../../services/user.api'
 import type { AttendanceRecord } from '../../types/attendance'
 import { formatLongDate, formatShortDate, formatTime } from '../../utils/date'
+import { buildDailyTrend, computeTodayStats, getRecentActivity } from '../../utils/statistics'
+
+const TREND_DAYS = 7
+const RECENT_LIMIT = 6
+const API_DATE_FORMAT = 'YYYY-MM-DD'
 
 export default function AdminDashboardPage() {
-  const { users } = useAuth()
   const navigate = useNavigate()
+  const [users, setUsers] = useState<ManagedUser[]>([])
+  const [records, setRecords] = useState<AttendanceRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadToken, setReloadToken] = useState(0)
 
-  const employees = useMemo(() => users.filter((user) => user.role === 'employee'), [users])
-  const stats = useMemo(
-    () => computeTodayStats(mockAttendanceRecords, employees),
+  useEffect(() => {
+    const controller = new AbortController()
+    const endDate = dayjs()
+    const filter: ReportFilter = {
+      startDate: endDate.subtract(TREND_DAYS - 1, 'day').format(API_DATE_FORMAT),
+      endDate: endDate.format(API_DATE_FORMAT),
+    }
+
+    Promise.all([fetchUsers(controller.signal), fetchAttendanceReport(filter, controller.signal)])
+      .then(([loadedUsers, loadedRecords]) => {
+        if (controller.signal.aborted) {
+          return
+        }
+        setUsers(loadedUsers)
+        setRecords(loadedRecords)
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return
+        }
+        setUsers([])
+        setRecords([])
+        setLoadError(
+          error instanceof Error ? error.message : 'Unable to load dashboard data.',
+        )
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [reloadToken])
+
+  const retryLoad = () => {
+    setLoading(true)
+    setLoadError(null)
+    setReloadToken((current) => current + 1)
+  }
+
+  const employees = useMemo(
+    () => users.filter((user) => user.role === 'employee'),
+    [users],
+  )
+  const employeeIds = useMemo(
+    () => new Set(employees.map((employee) => employee.id)),
     [employees],
   )
-  const trend = useMemo(() => buildDailyTrend(mockAttendanceRecords, 7), [])
-  const recentActivity = useMemo(() => getRecentActivity(mockAttendanceRecords, 6), [])
+  const employeeRecords = useMemo(
+    () => records.filter((record) => employeeIds.has(record.employeeId)),
+    [employeeIds, records],
+  )
+  const stats = useMemo(
+    () => computeTodayStats(employeeRecords, employees),
+    [employeeRecords, employees],
+  )
+  const trend = useMemo(() => buildDailyTrend(employeeRecords, TREND_DAYS), [employeeRecords])
+  const recentActivity = useMemo(
+    () => getRecentActivity(employeeRecords, RECENT_LIMIT),
+    [employeeRecords],
+  )
 
   const recentColumns: TableProps<AttendanceRecord>['columns'] = [
     {
@@ -82,6 +146,20 @@ export default function AdminDashboardPage() {
         </div>
       </div>
 
+      {loadError && (
+        <Alert
+          type="error"
+          showIcon
+          message={loadError}
+          action={
+            <Button size="small" onClick={retryLoad}>
+              Retry
+            </Button>
+          }
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       <div className="stat-grid">
         <StatCard
           title="Total Employees"
@@ -115,6 +193,7 @@ export default function AdminDashboardPage() {
 
       <div className="dashboard-grid">
         <Card
+          loading={loading}
           className="panel-card"
           title={
             <div>
@@ -126,6 +205,7 @@ export default function AdminDashboardPage() {
           <AttendanceTrendChart data={trend} />
         </Card>
         <Card
+          loading={loading}
           className="panel-card dashboard-glance"
           title={
             <div>
@@ -192,6 +272,7 @@ export default function AdminDashboardPage() {
           rowKey="id"
           columns={recentColumns}
           dataSource={recentActivity}
+          loading={loading}
           pagination={false}
           size="middle"
           scroll={{ x: 640 }}

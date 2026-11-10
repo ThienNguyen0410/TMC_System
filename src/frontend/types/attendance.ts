@@ -71,3 +71,4 @@ export interface EmployeeAttendanceSummary {
   totalHours: number
   totalRecords: number
 }
+

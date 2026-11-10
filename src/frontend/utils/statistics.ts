@@ -1,15 +1,18 @@
 import dayjs from 'dayjs'
-import type { AppUser } from '../types/auth'
 import type {
   AttendanceRecord,
   AttendanceStats,
   DailyTrendPoint,
 } from '../types/attendance'
-import { todayIso } from '../utils/date'
+import { todayIso } from './date'
+
+interface EmployeeRef {
+  id: string
+}
 
 export function computeTodayStats(
   records: AttendanceRecord[],
-  employees: AppUser[],
+  employees: readonly EmployeeRef[],
 ): AttendanceStats {
   const today = todayIso()
   const todayRecords = records.filter((record) => record.date === today)
@@ -33,7 +36,16 @@ export function computeTodayStats(
 }
 
 export function getRecentActivity(records: AttendanceRecord[], limit = 6): AttendanceRecord[] {
-  return records.slice(0, limit)
+  return records
+    .filter((record) => record.checkIn !== null || record.checkOut !== null)
+    .sort(
+      (left, right) =>
+        right.date.localeCompare(left.date) ||
+        (right.checkIn ?? right.checkOut ?? '').localeCompare(
+          left.checkIn ?? left.checkOut ?? '',
+        ),
+    )
+    .slice(0, limit)
 }
 
 export function buildDailyTrend(records: AttendanceRecord[], days = 7): DailyTrendPoint[] {

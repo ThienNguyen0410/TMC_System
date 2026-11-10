@@ -41,3 +41,4 @@ export function computeEmployeeSummary(records: AttendanceRecord[]): EmployeeAtt
     totalRecords: records.length,
   }
 }
+
