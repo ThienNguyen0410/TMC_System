@@ -10,11 +10,19 @@ export const createReportRouter = (
 ): Router => {
   const router = Router()
 
-  // Reports cover every employee, so only admins may read them.
-  router.use(requireAuth(authService), requireRole('admin'))
-
-  router.get('/attendance', (request, response) => controller.list(request, response))
-  router.get('/attendance/export', (request, response) => controller.exportCsv(request, response))
+  // Employees may read their own daily attendance; reports across employees stay admin-only.
+  router.get('/attendance/me', requireAuth(authService), (request, response) =>
+    controller.listMine(request, response),
+  )
+  router.get('/attendance', requireAuth(authService), requireRole('admin'), (request, response) =>
+    controller.list(request, response),
+  )
+  router.get(
+    '/attendance/export',
+    requireAuth(authService),
+    requireRole('admin'),
+    (request, response) => controller.exportCsv(request, response),
+  )
 
   return router
 }

@@ -259,7 +259,7 @@ export default function KioskPage() {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: false,
           video: {
-            facingMode: 'user',
+            facingMode: 'environment',
             width: { ideal: 1280 },
             height: { ideal: 720 },
           },

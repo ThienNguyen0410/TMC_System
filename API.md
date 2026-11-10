@@ -339,6 +339,35 @@ Errors: `400 VALIDATION_ERROR` (bad date, unknown status, range longer than 366 
 
 ---
 
+## GET /api/reports/attendance/me
+
+The signed-in user's own attendance report, with the same response shape, query parameters, and status rules as `GET /api/reports/attendance`. **Any authenticated user** may call it; the endpoint always scopes the rows to the account in the access token, so an employee cannot read another employee's records.
+
+```json
+{
+  "data": {
+    "filter": { "startDate": "2026-10-11", "endDate": "2026-11-09" },
+    "records": [
+      {
+        "employeeId": "5",
+        "fullName": "Nguyen Van An",
+        "username": "employee01",
+        "department": "Engineering",
+        "date": "2026-11-09",
+        "checkIn": "23:29:06",
+        "checkOut": "23:36:50",
+        "status": "late",
+        "workingHours": 0.13
+      }
+    ]
+  }
+}
+```
+
+Errors: `400 VALIDATION_ERROR`, `401`.
+
+---
+
 ## GET /api/reports/attendance/export
 
 Same access rules and query parameters as above, returned as a CSV download (`text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="tmc-attendance-report-<startDate>_<endDate>.csv"`).

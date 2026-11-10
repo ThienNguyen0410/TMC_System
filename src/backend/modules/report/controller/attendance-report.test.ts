@@ -5,13 +5,14 @@ import { withServer } from '../../../shared/testing/with-server.ts'
 import type { AuthUser, UserRole } from '../../user/domain/auth-user.ts'
 import type { AuthRepository } from '../../user/repository/auth.repository.ts'
 import { AuthService } from '../../user/service/auth.service.ts'
+import type { DailyActivity, ReportEmployee } from '../domain/attendance-report.ts'
 import { createReportRouter } from '../routes/report.routes.ts'
 import { AttendanceReportService } from '../service/attendance-report.service.ts'
 import { InMemoryAttendanceReportRepository } from '../testing/in-memory-attendance-report.repository.ts'
 import { AttendanceReportController } from './attendance-report.ts'
 
 interface ListBody {
-  data: { filter: unknown; records: Array<{ status: string }> }
+  data: { filter: unknown; records: Array<{ employeeId: string; status: string }> }
 }
 interface ErrorBody {
   error: { code: string }
@@ -55,10 +56,22 @@ const tokenFor = (id: string, role: UserRole) =>
 
 const asAdmin = async () => ({ Authorization: `Bearer ${await tokenFor('1', 'admin')}` })
 
-const serve = (run: (baseUrl: string) => Promise<void>) => {
+interface ServeOptions {
+  employees?: ReportEmployee[]
+  activity?: DailyActivity[]
+}
+
+const defaultEmployees: ReportEmployee[] = [
+  { id: '1', fullName: 'Nguyen Van A', username: 'a', department: 'IT', isActive: true },
+]
+const defaultActivity: DailyActivity[] = [
+  { employeeId: '1', date: '2026-11-02', checkIn: '08:55:00', checkOut: '17:30:00' },
+]
+
+const serve = (run: (baseUrl: string) => Promise<void>, options: ServeOptions = {}) => {
   const repository = new InMemoryAttendanceReportRepository(
-    [{ id: '1', fullName: 'Nguyen Van A', username: 'a', department: 'IT', isActive: true }],
-    [{ employeeId: '1', date: '2026-11-02', checkIn: '08:55:00', checkOut: '17:30:00' }],
+    options.employees ?? defaultEmployees,
+    options.activity ?? defaultActivity,
   )
   const service = new AttendanceReportService(repository, '09:00:00', () => TODAY)
   const controller = new AttendanceReportController(service, () => TODAY)
@@ -86,6 +99,43 @@ test('GET /api/reports/attendance defaults to today', () =>
 
     assert.deepEqual(body.data.filter, { startDate: TODAY, endDate: TODAY })
     assert.equal(body.data.records[0].status, 'absent')
+  }))
+
+test('GET /api/reports/attendance/me returns only the signed-in employee records', () =>
+  serve(
+    async (baseUrl) => {
+      const headers = { Authorization: `Bearer ${await tokenFor('2', 'employee')}` }
+      const response = await fetch(`${baseUrl}/api/reports/attendance/me?date=2026-11-02`, {
+        headers,
+      })
+      const body = (await response.json()) as ListBody
+
+      assert.equal(response.status, 200)
+      assert.deepEqual(
+        body.data.records.map((record) => record.employeeId),
+        ['2'],
+      )
+      assert.equal(body.data.records[0].status, 'late')
+    },
+    {
+      employees: [
+        ...defaultEmployees,
+        { id: '2', fullName: 'Tran B', username: 'b', department: 'IT', isActive: true },
+      ],
+      activity: [
+        ...defaultActivity,
+        { employeeId: '2', date: '2026-11-02', checkIn: '09:10:00', checkOut: '17:00:00' },
+      ],
+    },
+  ))
+
+test('GET /api/reports/attendance/me rejects a request without a valid token with 401', () =>
+  serve(async (baseUrl) => {
+    assert.equal((await fetch(`${baseUrl}/api/reports/attendance/me`)).status, 401)
+    const bad = await fetch(`${baseUrl}/api/reports/attendance/me`, {
+      headers: { Authorization: 'Bearer nope' },
+    })
+    assert.equal(bad.status, 401)
   }))
 
 test('GET /api/reports/attendance/export returns an attachment csv', () =>

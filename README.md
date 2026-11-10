@@ -4,7 +4,7 @@ TMC System is an employee attendance management application for an enterprise en
 
 The current implementation focuses on authentication. Login credentials are checked against the `"user".test_account` table in PostgreSQL. The application does not use JWT. After a successful login, the frontend stores the current user session in local storage and redirects the user according to their role.
 
-The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. The administrator statistics page reads attendance records and exports CSV from the backend report API; the other screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
+The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. The employee dashboard reads the signed-in employee's own attendance from the backend report API, and the administrator statistics page reads all attendance records and exports CSV from the same API. The remaining screens currently use local mock data for statistics, profile updates, and sign-up.
 
 ## Tech Stack
 
@@ -188,6 +188,7 @@ Note: the current working tree does not contain the backend `attendance` module 
 | `GET` | `/api/health` | Health check endpoint. |
 | `POST` | `/api/auth/login` | Validates credentials against `"user".test_account`. |
 | `GET` | `/api/reports/attendance` | Admin only. Attendance records as JSON. Query: `date`, or `startDate` + `endDate` (`YYYY-MM-DD`, at most 366 days), and optional `status`. See `API.md`. |
+| `GET` | `/api/reports/attendance/me` | Any signed-in user. Their own attendance records, with the same query parameters as the report above. |
 | `GET` | `/api/reports/attendance/export` | Admin only. Same filters, returned as a CSV download. |
 
 ### Login Request

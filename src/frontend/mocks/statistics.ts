@@ -4,7 +4,6 @@ import type {
   AttendanceRecord,
   AttendanceStats,
   DailyTrendPoint,
-  EmployeeAttendanceSummary,
 } from '../types/attendance'
 import { todayIso } from '../utils/date'
 
@@ -62,18 +61,4 @@ export function buildDailyTrend(records: AttendanceRecord[], days = 7): DailyTre
   }
 
   return trend
-}
-
-export function computeEmployeeSummary(records: AttendanceRecord[]): EmployeeAttendanceSummary {
-  return {
-    present: records.filter((record) => record.status === 'present').length,
-    late: records.filter((record) => record.status === 'late').length,
-    absent: records.filter((record) => record.status === 'absent').length,
-    incomplete: records.filter((record) => record.status === 'incomplete').length,
-    totalHours:
-      Math.round(
-        records.reduce((total, record) => total + (record.workingHours ?? 0), 0) * 100,
-      ) / 100,
-    totalRecords: records.length,
-  }
 }

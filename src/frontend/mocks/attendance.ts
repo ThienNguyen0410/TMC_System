@@ -134,7 +134,3 @@ function buildAttendanceRecords(): AttendanceRecord[] {
 }
 
 export const mockAttendanceRecords = buildAttendanceRecords()
-
-export function getEmployeeAttendance(employeeId: string): AttendanceRecord[] {
-  return mockAttendanceRecords.filter((record) => record.employeeId === employeeId)
-}
