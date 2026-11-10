@@ -1,4 +1,6 @@
 import type { Request, Response } from 'express'
+import { AuthenticationError } from '../../../shared/errors/app-error.ts'
+import type { AuthUser } from '../../user/domain/auth-user.ts'
 import type { AttendanceReportFilter, AttendanceReportRow } from '../domain/attendance-report.ts'
 import { formatAttendanceCsv } from '../service/attendance-csv.ts'
 import type { AttendanceReportService } from '../service/attendance-report.service.ts'
@@ -19,6 +21,18 @@ export class AttendanceReportController {
     response.status(200).json({ data: { filter, records } })
   }
 
+  async listMine(request: Request, response: Response): Promise<void> {
+    const user = response.locals.user as AuthUser | undefined
+
+    if (!user) {
+      throw new AuthenticationError('Authentication required.')
+    }
+
+    const { filter, records } = await this.load(request, user.id)
+
+    response.status(200).json({ data: { filter, records } })
+  }
+
   async exportCsv(request: Request, response: Response): Promise<void> {
     const { filter, records } = await this.load(request)
 
@@ -35,9 +49,10 @@ export class AttendanceReportController {
 
   private async load(
     request: Request,
+    employeeId?: string,
   ): Promise<{ filter: AttendanceReportFilter; records: AttendanceReportRow[] }> {
     const filter = parseAttendanceReportQuery(request.query, this.today())
 
-    return { filter, records: await this.reportService.getRows(filter) }
+    return { filter, records: await this.reportService.getRows(filter, employeeId) }
   }
 }

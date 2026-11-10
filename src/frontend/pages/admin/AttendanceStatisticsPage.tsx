@@ -10,14 +10,13 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
 import { AttendanceTable } from '../../components/attendance/AttendanceTable'
 import { StatCard } from '../../components/common/StatCard'
-import { computeEmployeeSummary } from '../../mocks/statistics'
 import {
   downloadAttendanceReportCsv,
   fetchAttendanceReport,
   type ReportFilter,
 } from '../../services/report.api'
 import type { AttendanceRecord, AttendanceStatus } from '../../types/attendance'
-import { attendanceStatusOptions } from '../../utils/attendance'
+import { attendanceStatusOptions, computeEmployeeSummary } from '../../utils/attendance'
 
 const { RangePicker } = DatePicker
 const API_DATE_FORMAT = 'YYYY-MM-DD'

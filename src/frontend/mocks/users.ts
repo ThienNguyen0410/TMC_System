@@ -1,5 +1,6 @@
 import type { MockUser } from '../types/auth'
 
+
 export const mockUsers: MockUser[] = [
   {
     id: 'EMP-0001',
