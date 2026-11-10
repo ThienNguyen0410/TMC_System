@@ -1,4 +1,4 @@
-import { NotFoundError } from '../../../shared/errors/app-error.ts'
+import { ConflictError, NotFoundError } from '../../../shared/errors/app-error.ts'
 import type { AuthUser, UpdateProfileInput } from '../domain/auth-user.ts'
 import type { UserRepository } from '../repository/user.repository.ts'
 
@@ -21,5 +21,21 @@ export class UserService {
     }
 
     return user
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    const user = await this.userRepository.findUserById(id)
+
+    if (!user) {
+      throw new NotFoundError('Account not found.')
+    }
+
+    if (user.role === 'admin') {
+      throw new ConflictError('Administrator accounts cannot be deleted.')
+    }
+
+    if (!(await this.userRepository.deactivateUser(id))) {
+      throw new NotFoundError('Account not found.')
+    }
   }
 }

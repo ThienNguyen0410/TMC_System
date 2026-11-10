@@ -12,6 +12,7 @@ export const createUserRouter = (controller: UserController, authService: AuthSe
 
   router.get('/', (request, response) => controller.list(request, response))
   router.put('/:id', (request, response) => controller.update(request, response))
+  router.delete('/:id', (request, response) => controller.delete(request, response))
 
   return router
 }
