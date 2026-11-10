@@ -25,17 +25,17 @@ import {
   Space,
   Table,
   Tag,
-  Tooltip,
   type TableProps,
 } from 'antd'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useEffect, useMemo, useState } from 'react'
+import { ConfirmModal } from '../../components/common/ConfirmModal'
 import { EmptyState } from '../../components/common/EmptyState'
-import { fetchUsers, updateUserProfile, type ManagedUser } from '../../services/user.api'
+import { deleteUser, fetchUsers, updateUserProfile, type ManagedUser } from '../../services/user.api'
 import type { AppUser } from '../../types/auth'
 import { avatarColorFor, getInitials, getRoleLabel } from '../../utils/user'
 
-type ManagementModal = 'view' | 'update'
+type ManagementModal = 'view' | 'update' | 'delete'
 type EmployeeRow = Omit<AppUser, 'qrCode'>
 
 interface ManagementFormValues {
@@ -78,6 +78,7 @@ export default function ManagementPage() {
   const [selectedUser, setSelectedUser] = useState<EmployeeRow | null>(null)
   const [modalMode, setModalMode] = useState<ManagementModal | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // Bumping the token refetches; the first render already starts with token 0.
   const [reloadToken, setReloadToken] = useState(0)
@@ -195,6 +196,27 @@ export default function ManagementPage() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!selectedUser) {
+      return
+    }
+
+    setDeleting(true)
+
+    try {
+      await deleteUser(selectedUser.id)
+      setAccounts((current) => current.filter((account) => account.id !== selectedUser.id))
+      message.success(`Deleted the account for ${selectedUser.fullName}.`)
+      closeModal()
+    } catch (error) {
+      message.error(
+        error instanceof Error ? error.message : 'The employee account could not be deleted.',
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const columns: TableProps<EmployeeRow>['columns'] = [
     {
       title: 'Employee',
@@ -275,13 +297,15 @@ export default function ManagementPage() {
           >
             Update
           </Button>
-          <Tooltip title="Deleting accounts is not available yet.">
-            <span>
-              <Button type="link" size="small" danger disabled icon={<DeleteOutlined />}>
-                Delete
-              </Button>
-            </span>
-          </Tooltip>
+          <Button
+            type="link"
+            size="small"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => openModal(employee, 'delete')}
+          >
+            Delete
+          </Button>
         </Space>
       ),
     },
@@ -548,6 +572,25 @@ export default function ManagementPage() {
           </p>
         </Form>
       </Modal>
+
+      <ConfirmModal
+        open={modalMode === 'delete'}
+        title="Delete employee account?"
+        description={
+          selectedUser && (
+            <p>
+              You are about to delete <strong>{selectedUser.fullName}</strong> (@
+              {selectedUser.username}). The account will no longer be able to sign in and will
+              disappear from this table; its attendance history is kept.
+            </p>
+          )
+        }
+        confirmText="Delete account"
+        danger
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={closeModal}
+      />
     </>
   )
 }

@@ -31,4 +31,16 @@ export class UserController {
 
     response.status(200).json({ data: { user } })
   }
+
+  async delete(request: Request, response: Response): Promise<void> {
+    const id = accountIdSchema.safeParse(request.params.id)
+
+    if (!id.success) {
+      throw new ValidationError(id.error.issues[0]?.message ?? 'Invalid account id.')
+    }
+
+    await this.userService.deleteUser(id.data)
+
+    response.status(204).end()
+  }
 }

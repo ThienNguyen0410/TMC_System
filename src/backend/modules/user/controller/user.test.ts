@@ -68,13 +68,34 @@ const asEmployee = async () => ({ Authorization: `Bearer ${await tokenFor('2', '
 class InMemoryUserRepository implements UserRepository {
   users: AuthUser[]
   updates: Array<{ id: string; input: UpdateProfileInput }> = []
+  deactivated = new Set<string>()
 
   constructor(users: AuthUser[]) {
     this.users = users
   }
 
+  // Mirrors Postgres: deactivated accounts are invisible to reads.
+  async findUserById(id: string): Promise<AuthUser | null> {
+    if (this.deactivated.has(id)) {
+      return null
+    }
+
+    return this.users.find((candidate) => candidate.id === id) ?? null
+  }
+
   async listUsers(): Promise<AuthUser[]> {
-    return this.users
+    return this.users.filter((account) => !this.deactivated.has(account.id))
+  }
+
+  async deactivateUser(id: string): Promise<AuthUser | null> {
+    const current = await this.findUserById(id)
+
+    if (!current) {
+      return null
+    }
+
+    this.deactivated.add(id)
+    return current
   }
 
   async updateUserProfile(id: string, input: UpdateProfileInput): Promise<AuthUser | null> {
@@ -128,6 +149,9 @@ const putProfile = (baseUrl: string, id: string, body: unknown, headers: Record<
     headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   })
+
+const deleteAccount = (baseUrl: string, id: string, headers: Record<string, string> = {}) =>
+  fetch(`${baseUrl}/api/users/${id}`, { method: 'DELETE', headers })
 
 test('GET /api/users returns every account to an admin', () =>
   serve(async (baseUrl) => {
@@ -242,4 +266,79 @@ test('PUT /api/users/:id reports a duplicate email', () =>
 
     assert.equal(response.status, 409)
     assert.equal(body.error.code, 'CONFLICT')
+  }))
+
+test('DELETE /api/users/:id deactivates an employee and drops them from the list', () =>
+  serve(async (baseUrl, repository) => {
+    const response = await deleteAccount(baseUrl, '2', await asAdmin())
+
+    assert.equal(response.status, 204)
+    assert.equal(await response.text(), '')
+    assert.deepEqual([...repository.deactivated], ['2'])
+
+    const list = await fetch(`${baseUrl}/api/users`, { headers: await asAdmin() })
+    const body = (await list.json()) as ListBody
+
+    assert.deepEqual(
+      body.data.users.map((account) => account.id),
+      ['1', '3'],
+    )
+  }))
+
+test('DELETE /api/users/:id requires a token', () =>
+  serve(async (baseUrl) => {
+    const response = await deleteAccount(baseUrl, '2')
+    const body = (await response.json()) as ErrorBody
+
+    assert.equal(response.status, 401)
+    assert.equal(body.error.code, 'INVALID_CREDENTIALS')
+  }))
+
+test('DELETE /api/users/:id rejects a non-admin', () =>
+  serve(async (baseUrl) => {
+    const response = await deleteAccount(baseUrl, '3', await asEmployee())
+
+    assert.equal(response.status, 403)
+  }))
+
+test('DELETE /api/users/:id rejects an id that is not a database key', () =>
+  serve(async (baseUrl, repository) => {
+    const response = await deleteAccount(baseUrl, 'EMP-0001', await asAdmin())
+    const body = (await response.json()) as ErrorBody
+
+    assert.equal(response.status, 400)
+    assert.equal(body.error.code, 'VALIDATION_ERROR')
+    assert.equal(repository.deactivated.size, 0)
+  }))
+
+test('DELETE /api/users/:id reports an unknown account', () =>
+  serve(async (baseUrl) => {
+    const response = await deleteAccount(baseUrl, '999999', await asAdmin())
+    const body = (await response.json()) as ErrorBody
+
+    assert.equal(response.status, 404)
+    assert.equal(body.error.code, 'NOT_FOUND')
+  }))
+
+test('DELETE /api/users/:id reports an already deleted account', () =>
+  serve(async (baseUrl) => {
+    const headers = await asAdmin()
+
+    assert.equal((await deleteAccount(baseUrl, '2', headers)).status, 204)
+
+    const repeat = await deleteAccount(baseUrl, '2', headers)
+    const body = (await repeat.json()) as ErrorBody
+
+    assert.equal(repeat.status, 404)
+    assert.equal(body.error.code, 'NOT_FOUND')
+  }))
+
+test('DELETE /api/users/:id refuses an administrator account', () =>
+  serve(async (baseUrl, repository) => {
+    const response = await deleteAccount(baseUrl, '1', await asAdmin())
+    const body = (await response.json()) as ErrorBody
+
+    assert.equal(response.status, 409)
+    assert.equal(body.error.code, 'CONFLICT')
+    assert.equal(repository.deactivated.size, 0)
   }))

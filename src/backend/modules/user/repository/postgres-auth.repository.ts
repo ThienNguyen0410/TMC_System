@@ -162,7 +162,7 @@ export class PostgresAuthRepository implements AuthRepository, UserRepository {
 
   async listUsers(): Promise<AuthUser[]> {
     const result = await this.pool.query<UserRow>(
-      `${userSelect('"user".users')} ORDER BY u.full_name, u.id`,
+      `${userSelect('"user".users')} WHERE u.is_active = TRUE ORDER BY u.full_name, u.id`,
     )
 
     return result.rows.map(toAuthUser)
@@ -191,6 +191,23 @@ export class PostgresAuthRepository implements AuthRepository, UserRepository {
 
       throw error
     }
+  }
+
+  // Soft delete: attendance rows keep pointing at the account, but it can no longer sign in.
+  async deactivateUser(id: string): Promise<AuthUser | null> {
+    const result = await this.pool.query<UserRow>(
+      `WITH deactivated AS (
+         UPDATE "user".users
+         SET is_active = FALSE
+         WHERE id = $1 AND is_active = TRUE
+         RETURNING *
+       )
+       ${userSelect('deactivated')}`,
+      [id],
+    )
+    const row = result.rows[0]
+
+    return row ? toAuthUser(row) : null
   }
 
   async createAccount(account: NewAccount): Promise<AuthAccount> {

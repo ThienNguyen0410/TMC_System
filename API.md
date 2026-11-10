@@ -257,7 +257,7 @@ Every account, ordered by full name. **Admin only**: `401` without a valid token
 }
 ```
 
-`email`, `phone`, `dateOfBirth` and `department` can be `null`. Deactivated accounts are included. There is no server-side search or paging; the management page filters client-side.
+`email`, `phone`, `dateOfBirth` and `department` can be `null`. Deactivated (deleted) accounts are not returned. There is no server-side search or paging; the management page filters client-side.
 
 ---
 
@@ -286,6 +286,23 @@ Content-Type: application/json
 `200 OK` with the updated account as `{ data: { user } }`.
 
 Errors: `400 VALIDATION_ERROR`, `404 NOT_FOUND` for an unknown id, `409 CONFLICT` when the email belongs to another account.
+
+---
+
+## DELETE /api/users/{id}
+
+Deletes one account. **Admin only**. This is a soft delete: `is_active` is set to `false`, so the account can no longer sign in, refresh a session, or appear in `GET /api/users`. Attendance records and QR codes are kept, which is why the row itself is not removed.
+
+```http
+DELETE /api/users/1
+Authorization: Bearer <accessToken>
+```
+
+`204 No Content`, empty body.
+
+Errors: `400 VALIDATION_ERROR` for an id that is not a number, `401` without a valid token, `403 FORBIDDEN` for any other role, `404 NOT_FOUND` for an unknown or already deleted account, `409 CONFLICT` when the target is an administrator (`"Administrator accounts cannot be deleted."`).
+
+There is no restore endpoint yet; reactivating an account means setting `is_active` back to `true` in the database.
 
 ---
 

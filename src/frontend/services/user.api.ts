@@ -108,3 +108,8 @@ export async function updateUserProfile(
 
   return user
 }
+
+// A 204 has no body, which requestUsers already tolerates.
+export async function deleteUser(id: string): Promise<void> {
+  await requestUsers(`/api/users/${id}`, { method: 'DELETE' })
+}
