@@ -1,4 +1,4 @@
-import { EditOutlined, QrcodeOutlined } from '@ant-design/icons'
+import { QrcodeOutlined } from '@ant-design/icons'
 import { Avatar, Badge, Button, Card, Descriptions, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { useState } from 'react'
@@ -106,10 +106,6 @@ export function ProfileCard({ user }: ProfileCardProps) {
               },
             ]}
           />
-          <p className="profile-note">
-            This profile is mock data stored in the browser. Editing it updates the demonstration
-            only and does not call a backend service.
-          </p>
         </Card>
       </div>
 

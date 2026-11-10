@@ -1,16 +1,18 @@
 import dayjs from 'dayjs'
-import type { AppUser } from '../types/auth'
 import type {
   AttendanceRecord,
   AttendanceStats,
   DailyTrendPoint,
-  EmployeeAttendanceSummary,
 } from '../types/attendance'
-import { todayIso } from '../utils/date'
+import { todayIso } from './date'
+
+interface EmployeeRef {
+  id: string
+}
 
 export function computeTodayStats(
   records: AttendanceRecord[],
-  employees: AppUser[],
+  employees: readonly EmployeeRef[],
 ): AttendanceStats {
   const today = todayIso()
   const todayRecords = records.filter((record) => record.date === today)
@@ -34,7 +36,16 @@ export function computeTodayStats(
 }
 
 export function getRecentActivity(records: AttendanceRecord[], limit = 6): AttendanceRecord[] {
-  return records.slice(0, limit)
+  return records
+    .filter((record) => record.checkIn !== null || record.checkOut !== null)
+    .sort(
+      (left, right) =>
+        right.date.localeCompare(left.date) ||
+        (right.checkIn ?? right.checkOut ?? '').localeCompare(
+          left.checkIn ?? left.checkOut ?? '',
+        ),
+    )
+    .slice(0, limit)
 }
 
 export function buildDailyTrend(records: AttendanceRecord[], days = 7): DailyTrendPoint[] {
@@ -62,18 +73,4 @@ export function buildDailyTrend(records: AttendanceRecord[], days = 7): DailyTre
   }
 
   return trend
-}
-
-export function computeEmployeeSummary(records: AttendanceRecord[]): EmployeeAttendanceSummary {
-  return {
-    present: records.filter((record) => record.status === 'present').length,
-    late: records.filter((record) => record.status === 'late').length,
-    absent: records.filter((record) => record.status === 'absent').length,
-    incomplete: records.filter((record) => record.status === 'incomplete').length,
-    totalHours:
-      Math.round(
-        records.reduce((total, record) => total + (record.workingHours ?? 0), 0) * 100,
-      ) / 100,
-    totalRecords: records.length,
-  }
 }

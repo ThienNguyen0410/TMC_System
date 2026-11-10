@@ -36,19 +36,26 @@ export class AttendanceReportService {
     this.today = today
   }
 
-  async getRows(filter: AttendanceReportFilter): Promise<AttendanceReportRow[]> {
+  async getRows(
+    filter: AttendanceReportFilter,
+    employeeId?: string,
+  ): Promise<AttendanceReportRow[]> {
     const range: DateRange = { startDate: filter.startDate, endDate: filter.endDate }
     const [employees, activity] = await Promise.all([
       this.repository.listEmployees(),
       this.repository.listDailyActivity(range),
     ])
-    const employeeById = new Map(employees.map((employee) => [employee.id, employee]))
+    const scopedEmployees =
+      employeeId === undefined ? employees : employees.filter((employee) => employee.id === employeeId)
+    const scopedActivity =
+      employeeId === undefined ? activity : activity.filter((entry) => entry.employeeId === employeeId)
+    const employeeById = new Map(scopedEmployees.map((employee) => [employee.id, employee]))
 
     const rows = [
-      ...activity.map((entry) =>
+      ...scopedActivity.map((entry) =>
         this.toRow(entry, employeeById.get(entry.employeeId) ?? unknownEmployee(entry.employeeId)),
       ),
-      ...this.absentRows(employeeById, activity, range),
+      ...this.absentRows(employeeById, scopedActivity, range),
     ]
 
     return rows.filter((row) => !filter.status || row.status === filter.status).sort(compareRows)

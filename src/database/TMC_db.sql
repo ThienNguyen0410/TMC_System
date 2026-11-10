@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS attendance.gates (
 CREATE TABLE IF NOT EXISTS attendance.qr_codes (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     employee_id BIGINT NOT NULL
-        REFERENCES "user".employees(id),
+        REFERENCES "user".users(id),
     token_hash TEXT NOT NULL UNIQUE,
     issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ,
@@ -99,11 +99,12 @@ CREATE TABLE IF NOT EXISTS attendance.qr_codes (
 CREATE TABLE IF NOT EXISTS attendance.attendance_records (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     employee_id BIGINT NOT NULL
-        REFERENCES "user".employees(id),
+        REFERENCES "user".emplo(id),
     gate_id BIGINT
         REFERENCES attendance.gates(id),
     event_type VARCHAR(20) NOT NULL,
     recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	locations JSON not NUll,
     source VARCHAR(30) NOT NULL DEFAULT 'QR',
 
     CONSTRAINT chk_attendance_event_type

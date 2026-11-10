@@ -48,6 +48,30 @@ test('builds a present row with working hours from activity', async () => {
   })
 })
 
+test('scopes rows to one employee when an employee id is given', async () => {
+  const rows = await serviceWith(
+    [A, B],
+    [
+      day('1', '2026-11-02', '08:55:00', '17:30:00'),
+      day('2', '2026-11-02', '09:10:00', '17:00:00'),
+    ],
+  ).getRows(oneDay('2026-11-02'), '2')
+
+  assert.deepEqual(
+    rows.map((row) => [row.employeeId, row.status]),
+    [['2', 'late']],
+  )
+})
+
+test('scopes generated absent rows to the requested employee', async () => {
+  const rows = await serviceWith([A, B]).getRows(oneDay('2026-11-02'), '2')
+
+  assert.deepEqual(
+    rows.map((row) => [row.employeeId, row.status]),
+    [['2', 'absent']],
+  )
+})
+
 test('generates absent rows for active employees on weekdays with no activity', async () => {
   const rows = await serviceWith([A, B, C]).getRows(oneDay('2026-11-02'))
 

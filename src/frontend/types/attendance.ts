@@ -1,5 +1,36 @@
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'incomplete'
 
+export type AttendanceEventType = 'CHECK_IN' | 'CHECK_OUT'
+
+export interface GeoLocation {
+  latitude: number
+  longitude: number
+  accuracy: number
+}
+
+export interface AttendanceQrCode {
+  token: string
+  issuedAt: string
+  expiresAt: string
+  expiresInSeconds: number
+  location: GeoLocation | null
+}
+
+export interface AttendanceEmployee {
+  id: string
+  username: string
+  fullName: string
+  department: string | null
+}
+
+export interface AttendanceConfirmation {
+  recordId: string
+  employee: AttendanceEmployee
+  eventType: AttendanceEventType
+  recordedAt: string
+  source: string
+}
+
 export interface AttendanceRecord {
   id: string
   employeeId: string
@@ -40,3 +71,4 @@ export interface EmployeeAttendanceSummary {
   totalHours: number
   totalRecords: number
 }
+

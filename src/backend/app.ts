@@ -4,6 +4,11 @@ import express from 'express'
 import { pool } from '../database/config.ts'
 import { env } from './config/env.ts'
 import { NodemailerPasswordResetMailer } from './infrastructure/external/mail/nodemailer-password-reset-mailer.ts'
+import { AttendanceController } from './modules/attendance/controller/attendance.ts'
+import { PostgresAttendanceRepository } from './modules/attendance/repository/postgres-attendance.repository.ts'
+import { createAttendanceRouter } from './modules/attendance/routes/attendance.routes.ts'
+import { AttendanceService } from './modules/attendance/service/attendance.service.ts'
+import { QrCodeService } from './modules/attendance/service/qr-code.service.ts'
 import { AttendanceReportController } from './modules/report/controller/attendance-report.ts'
 import { todayIn } from './modules/report/domain/report-dates.ts'
 import { PostgresAttendanceReportRepository } from './modules/report/repository/postgres-attendance-report.repository.ts'
@@ -41,6 +46,13 @@ export const createApp = () => {
   const reportService = new AttendanceReportService(reportRepository, env.reportLateAfter, today)
   const reportController = new AttendanceReportController(reportService, today)
 
+  const attendanceRepository = new PostgresAttendanceRepository(pool)
+  const qrCodeService = new QrCodeService(attendanceRepository)
+  const attendanceService = new AttendanceService(attendanceRepository, qrCodeService, {
+    cooldownSeconds: 30,
+  })
+  const attendanceController = new AttendanceController(qrCodeService, attendanceService)
+
   const app = express()
 
   app.disable('x-powered-by')
@@ -51,6 +63,7 @@ export const createApp = () => {
   app.use('/api/auth', createAuthRouter(authController, authService))
   app.use('/api/users', createUserRouter(userController, authService))
   app.use('/api/reports', createReportRouter(reportController, authService))
+  app.use('/api/attendance', createAttendanceRouter(attendanceController, authService))
 
   app.get('/api/health', (_request, response) => {
     response.json({ data: { status: 'ok' } })

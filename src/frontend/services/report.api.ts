@@ -67,7 +67,22 @@ export async function fetchAttendanceReport(
   filter: ReportFilter,
   signal?: AbortSignal,
 ): Promise<AttendanceRecord[]> {
-  const response = await requestReport('/api/reports/attendance', filter, signal)
+  return fetchReportRecords('/api/reports/attendance', filter, signal)
+}
+
+export async function fetchMyAttendance(
+  filter: ReportFilter,
+  signal?: AbortSignal,
+): Promise<AttendanceRecord[]> {
+  return fetchReportRecords('/api/reports/attendance/me', filter, signal)
+}
+
+async function fetchReportRecords(
+  path: string,
+  filter: ReportFilter,
+  signal?: AbortSignal,
+): Promise<AttendanceRecord[]> {
+  const response = await requestReport(path, filter, signal)
   const payload: unknown = await response.json().catch(() => null)
 
   if (!isRecord(payload) || !isRecord(payload.data) || !Array.isArray(payload.data.records)) {

@@ -1,428 +1,263 @@
 # TMC System
 
-TMC System is an employee attendance management application for an enterprise environment. The repository contains a React frontend, a Node.js backend, and a PostgreSQL database schema.
+TMC System is an employee attendance management application built for a software-architecture course project. Employees issue a short-lived QR code from their own account and scan it at a kiosk to check in and out; administrators review attendance reports, export them as CSV and manage employee profiles.
 
-The current implementation focuses on authentication. Login credentials are checked against the `"user".test_account` table in PostgreSQL. The application does not use JWT. After a successful login, the frontend stores the current user session in local storage and redirects the user according to their role.
+The API, database and most screens are real: authentication with JWT and a refresh cookie, password reset over SMTP, QR attendance with a geofence, attendance reports, and admin account management. The administrator dashboard and profile editing still read local mock data — see [Still mocked](#still-mocked).
 
-The frontend also includes employee and administrator dashboards, profile pages, attendance tables, a kiosk screen, and administrator statistics. The administrator statistics page reads attendance records and exports CSV from the backend report API; the other screens currently use local mock data for attendance, statistics, profile updates, and sign-up.
+## Features
 
-## Tech Stack
+- **Accounts** — sign up, sign in, sign out, session refresh, profile read.
+- **Password reset** — emailed single-use link that also revokes existing sessions.
+- **QR attendance** — a 5-second single-use QR issued to the signed-in employee, scanned by a kiosk page through the camera.
+- **Geofence and cooldown** — the QR and the kiosk must be within 1 m of each other; a second scan within 30 s is rejected.
+- **Reports** — per employee per day: check-in, check-out, status and working hours, with CSV export for admins.
+- **Administration** — admin-only account list and profile editing, plus role-based routing.
 
-### Frontend
+## Tech stack
 
-- React 19
-- TypeScript
-- Vite
-- Ant Design 6
-- React Router
-- SCSS
-- `qrcode.react` for QR code rendering
-- `dayjs` for date handling
+| Layer | Tools |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite 8, Ant Design 6, React Router 7, SCSS, `qrcode.react`, `jsQR`, `dayjs` |
+| Backend | Node.js 22 (TypeScript run with type stripping), Express 5, Zod 4, `pg`, `jose` (JWT), `nodemailer`, `cookie-parser`, `cors` |
+| Database | PostgreSQL 16 in Docker, `node-pg-migrate` |
+| Tooling | oxlint, `tsc` project references, Node's built-in test runner |
 
-### Backend
+## Architecture
 
-- Node.js built-in HTTP server
-- TypeScript
-- PostgreSQL via `pg`
-- `dotenv` for environment variables
+Every backend module follows the same layering:
+
+```text
+HTTP → route → controller (Zod) → service → repository interface → Postgres repository → PostgreSQL
+```
+
+- `src/backend/app.ts` is the composition root: it creates repositories, services, controllers and routers. Nothing else resolves dependencies.
+- Classes take their dependencies through the constructor and keep them in `private readonly` fields.
+- `src/backend/shared/` holds framework-agnostic pieces: `AppError` subclasses, the Express error and 404 handlers, password hashing, token helpers and the test HTTP harness.
+- `src/backend/infrastructure/external/` holds adapters to the outside world (SMTP mail, HR/Payroll HTTP and logging gateways).
+- Node executes the `.ts` files directly, so imports carry the `.ts` extension and the code must stay erasable: no `enum`, no constructor parameter properties, `import type` for types.
+
+| Module | Contents |
+| --- | --- |
+| `modules/user` | accounts, sessions, password reset, auth middleware, admin profile management |
+| `modules/attendance` | QR issuing and validation, scanning, attendance records, outbox event |
+| `modules/report` | daily aggregation, status classification, CSV formatting |
+
+## Getting started
+
+### Requirements
+
+- **Node.js 22.18 or newer** — the API runs TypeScript with Node's type stripping; Node 22.12 fails with `ERR_UNKNOWN_FILE_EXTENSION .ts`.
+- **npm 10 or newer**
+- **Docker with Compose** — PostgreSQL runs in a container on host port 5432.
+- A modern browser. The kiosk needs a camera, and browsers only expose it on `localhost` or HTTPS.
+
+### Environment
+
+```bash
+cp .env.example .env
+```
+
+Then fill in `DB_PASSWORD`, `DATABASE_URL` (same credentials) and `JWT_ACCESS_SECRET`. The API refuses to start if `JWT_ACCESS_SECRET` is missing, a numeric setting is not positive, or the report time zone / late threshold is malformed.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `5000` in `.env.example` (`3001` in code) | API port; the Vite proxy follows this value. |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | — | Postgres connection used by the pool. |
+| `DATABASE_URL` | — | The same database in URL form, for `node-pg-migrate`. |
+| `JWT_ACCESS_SECRET` | — | **Required.** HS256 key for access tokens. |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900` | Access token lifetime (15 minutes). |
+| `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime. |
+| `PASSWORD_RESET_TTL_MINUTES` | `30` | Reset link lifetime. |
+| `APP_BASE_URL` | `http://localhost:5173` | Origin used to build reset links. |
+| `COOKIE_SECURE` | `false` | Must be `true` in production. |
+| `ALLOWED_ORIGINS` | — | Comma-separated CORS origins; required in production. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | — / `587` | Reset mail. `SMTP_HOST` is required in production; without it the API logs the failure and still answers `202`. |
+| `REPORT_TIME_ZONE` | `Asia/Ho_Chi_Minh` | IANA zone that decides which local day an event belongs to. |
+| `REPORT_LATE_AFTER` | `09:00:00` | Check-ins after this time count as late. |
+
+`NODE_ENV=production` additionally requires `COOKIE_SECURE=true`, `ALLOWED_ORIGINS` and `SMTP_HOST`.
+
+The frontend calls relative `/api/...` URLs, which the Vite dev proxy forwards. Set `VITE_API_BASE_URL` to override the base.
 
 ### Database
 
-- PostgreSQL
-- SQL schema and seed data in `src/database/TMC_db.sql`
-
-## Software Requirements
-
-Install the following software before running the project:
-
-- **Node.js 22.18 or newer**
-  - The backend runs TypeScript files directly with Node.js, so a recent Node.js 22 release is required.
-- **npm 10 or newer**
-  - Usually installed together with Node.js.
-- **PostgreSQL**
-  - A local PostgreSQL server is recommended.
-  - `psql` or pgAdmin can be used to create the database and run the SQL file.
-- **A modern web browser**
-  - Chrome, Edge, Firefox, or a similar browser.
-
-## Environment Variables
-
-Create a `.env` file in the project root directory with the following variables:
-
-```env
-PORT=5000
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=TMC_DB
-DB_USER=postgres
-DB_PASSWORD=<your_db_password>
-```
-
-| Variable | Description |
-| --- | --- |
-| `PORT` | HTTP port used by the backend server. The Vite development proxy uses the same port. |
-| `DB_HOST` | PostgreSQL host. |
-| `DB_PORT` | PostgreSQL port. |
-| `DB_NAME` | Database name. |
-| `DB_USER` | PostgreSQL user. |
-| `DB_PASSWORD` | Password of the PostgreSQL user. |
-| `REPORT_TIME_ZONE` | Optional. IANA time zone that decides which local day an attendance event belongs to. Defaults to `Asia/Ho_Chi_Minh`. |
-| `REPORT_LATE_AFTER` | Optional. Check-ins after this `HH:mm:ss` time count as late. Defaults to `09:00:00`. |
-
-Do not commit the `.env` file to Git. Replace `<your_db_password>` with the password of your local PostgreSQL account.
-
-## Database Setup
-
-PostgreSQL runs in Docker; nothing needs to be installed locally.
-
-### 1. Configure the environment
-
-Copy `.env.example` to `.env` and set `DB_PASSWORD`. The defaults already match the Compose setup (`DB_PORT=5432`, `DB_NAME=TMC_DB`, `DB_USER=postgres`).
-
-### 2. Start the database and create the schema
-
-From the project root:
-
 ```bash
-npm run db:up        # docker compose up -d --wait db
+npm run db:up        # starts Postgres 16 in Docker (host port 5432)
 npm run db:migrate   # applies src/database/migrations
 ```
-
-The migrations create the schemas `"user"`, `role`, `attendance`, `report`, the tables used by the application, and the demo accounts.
-
-Useful commands:
 
 | Command | Effect |
 | --- | --- |
 | `npm run db:down` | Stops the container, keeps the data volume. |
-| `npm run db:reset` | **Destroys all data**, recreates the container, and migrates. |
-| `npm run db:new -- <name>` | Creates the next migration file. |
+| `npm run db:reset` | **Destroys all data**, recreates the container and migrates. |
+| `npm run db:rollback` | Reverts the last migration. |
+| `npm run db:new -- <name>` | Creates the next numbered migration file. |
 
-`src/database/TMC_db.sql` is a historical snapshot; do not run it manually — migration `0001_baseline.sql` reproduces it.
+`src/database/TMC_db.sql` is the historical schema snapshot. Do not run it: `0001_baseline.sql` reproduces it and later migrations move past it.
 
-### Seeded Login Accounts
+### Run
 
-| Username | Password | Role | Redirect |
+```bash
+npm install
+npm run api   # API on http://localhost:<PORT>
+npm run dev   # Vite on http://localhost:5173
+```
+
+Both commands watch for changes. Restart both if you change `PORT`.
+
+### Demo accounts
+
+| Username | Password | Role | Lands on |
 | --- | --- | --- | --- |
 | `employee01` | `Employee123!` | `employee` | `/employee/dashboard` |
 | `admin01` | `Admin123!` | `admin` | `/admin/dashboard` |
 | `admin` | `123456` | `employee` | `/employee/dashboard` |
 
-The two demo accounts `employee01` and `admin01` are the accounts used by the demo buttons on the Login page.
+The first two have one-click demo buttons on the login page. `admin` is a legacy account with a 6-character password, so it is not created through the password policy.
 
-## Installation
-
-From the project root:
-
-```powershell
-npm install
-```
-
-## Running the Project
-
-Use two terminals. Both commands must be run from the project root.
-
-### Terminal 1: Start the backend
-
-```powershell
-npm run api
-```
-
-The backend reads configuration from `.env`. With the example configuration, it listens on:
-
-```text
-http://localhost:5000
-```
-
-The backend prints the following messages when it starts successfully:
-
-```text
-Database connection successfully!
-TMC backend listening on http://localhost:5000
-```
-
-### Terminal 2: Start the frontend
-
-```powershell
-npm run dev
-```
-
-Vite starts the frontend development server. The default address is:
-
-```text
-http://localhost:5173
-```
-
-Open that address in a web browser.
-
-The Vite development server proxies requests starting with `/api` to the backend port configured in `.env`. If you change `PORT`, restart both `npm run api` and `npm run dev` so the proxy uses the new port.
-
-## Login Flow
-
-1. The user enters a username and password on `/login`.
-2. The frontend sends a request to `POST /api/auth/login`.
-3. The backend queries `"user".test_account` using parameterized SQL.
-4. If the credentials are valid, the backend returns the account ID, username, and role.
-5. The frontend stores the session in local storage.
-6. The frontend redirects to the dashboard matching the role:
-   - `employee` to `/employee/dashboard`
-   - `admin` to `/admin/dashboard`
-7. If the credentials are invalid, the backend returns `401 INVALID_CREDENTIALS` and the login page displays an error.
-
-## Available Scripts
+## Scripts
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Starts the Vite frontend development server. |
-| `npm run api` | Starts the backend with Node.js watch mode. |
-| `npm run build` | Type-checks the TypeScript projects and builds the frontend. |
-| `npm run lint` | Runs oxlint on the project. |
-| `npm run preview` | Previews the frontend production build. |
+| `npm run dev` | Vite dev server with the `/api` proxy. |
+| `npm run api` | Backend with `--watch`. |
+| `npm run build` | `tsc -b` plus the production frontend build. |
+| `npm run lint` | oxlint. |
+| `npm test` | Backend tests via `node --test` (`*.test.ts`). |
+| `npm run preview` | Serves the production build. |
+| `npm run db:*` | See the database table above. |
 
-Note: the current working tree does not contain the backend `attendance` module implementation, but the legacy HR/Payroll adapters still import their types. Because of this, the backend TypeScript step of `npm run build` may fail. The development commands `npm run dev` and `npm run api` are not affected.
+## API
 
-## API Endpoints
+Success responses are wrapped in `data`, failures in `error: { code, message }`. Full payloads and error codes are in [`API.md`](API.md).
 
-| Method | Path | Description |
+| Method | Path | Access |
 | --- | --- | --- |
-| `GET` | `/api/health` | Health check endpoint. |
-| `POST` | `/api/auth/login` | Validates credentials against `"user".test_account`. |
-| `GET` | `/api/reports/attendance` | Admin only. Attendance records as JSON. Query: `date`, or `startDate` + `endDate` (`YYYY-MM-DD`, at most 366 days), and optional `status`. See `API.md`. |
-| `GET` | `/api/reports/attendance/export` | Admin only. Same filters, returned as a CSV download. |
+| `GET` | `/api/health` | public |
+| `POST` | `/api/auth/register` | public |
+| `POST` | `/api/auth/login` | public |
+| `POST` | `/api/auth/refresh` | refresh cookie |
+| `POST` | `/api/auth/logout` | refresh cookie |
+| `GET` | `/api/auth/me` | bearer token |
+| `POST` | `/api/auth/forgot-password` | public |
+| `POST` | `/api/auth/reset-password` | public |
+| `GET` | `/api/users` | admin |
+| `PUT` | `/api/users/{id}` | admin |
+| `POST` | `/api/attendance/qr-codes` | bearer token |
+| `POST` | `/api/attendance/scan` | public (kiosk) |
+| `GET` | `/api/reports/attendance` | admin |
+| `GET` | `/api/reports/attendance/me` | bearer token |
+| `GET` | `/api/reports/attendance/export` | admin, CSV download |
 
-### Login Request
+Roles: `employee`, `production_supervisor`, `hr`, `security_guard`, `admin`, `executive_management`. The role is read from the database on every request, so a change applies on the next call.
 
-```http
-POST /api/auth/login
-Content-Type: application/json
-```
+## How it works
 
-```json
-{
-  "username": "employee01",
-  "password": "Employee123!"
-}
-```
+### Sessions
 
-### Successful Login Response
+- `POST /api/auth/login` returns the user and a 15-minute JWT, and sets an httpOnly `refresh_token` cookie scoped to `/api/auth` for 7 days.
+- Passwords are stored as `scrypt$N$r$p$salt$hash`; only SHA-256 hashes of refresh and reset tokens are stored.
+- The frontend keeps the access token in memory (never `localStorage`), sends `credentials: 'include'`, and refreshes once after a `401`.
+- `POST /api/auth/refresh` rotates the token in a transaction: the old row is revoked and linked to its replacement, so a replayed token fails.
+- Sign-out revokes the refresh token and clears the cookie; the access token itself lives until it expires.
 
-```json
-{
-  "data": {
-    "user": {
-      "id": "2",
-      "username": "employee01",
-      "role": "employee"
-    }
-  }
-}
-```
+### Password reset
 
-### Invalid Login Response
+- `POST /api/auth/forgot-password` always answers `202`, whether or not the address belongs to an account.
+- A new link invalidates the previous unused one. Links are single-use and expire after `PASSWORD_RESET_TTL_MINUTES`.
+- Using a link sets the new password, stamps `password_changed_at`, and revokes every refresh token for the account.
 
-```json
-{
-  "error": {
-    "code": "INVALID_CREDENTIALS",
-    "message": "Invalid username or password."
-  }
-}
-```
+### QR attendance
 
-## Project Structure
+1. The employee opens the QR dialog; the browser reports its position and the frontend calls `POST /api/attendance/qr-codes`.
+2. The API stores a hashed token valid for **5 seconds**, bound to the employee and that location.
+3. The kiosk reads the code with the camera (`jsQR`) and posts the raw token plus its own position to the public `POST /api/attendance/scan`.
+4. The API checks that the QR is live and unused, that the two positions are within **1 m**, and that the employee is still active.
+5. A **30-second cooldown** prevents double scans; the event alternates check-in and check-out based on the previous record.
+6. Recording is one transaction: the QR is marked used, the attendance row is inserted, and an `attendance.recorded` event is written to `attendance.outbox`.
 
-The tree below reflects the current repository structure, including the administrator Management page and its styles. Generated or local-only directories such as `.git/`, `node_modules/`, and `dist/` are omitted.
+The kiosk needs no login, and the QR carries no employee identity — only an unguessable random token.
+
+### Reports
+
+- Events are grouped per employee and per local day in `REPORT_TIME_ZONE`; each row holds the earliest check-in and the latest check-out.
+- `absent` rows are generated for active employees on weekdays without events, up to today.
+- Status: `absent` (no events), `incomplete` (one end missing, or check-out before check-in), `late` (first check-in after `REPORT_LATE_AFTER`), otherwise `present`.
+- Query with a single `date`, or an inclusive `startDate`/`endDate` range of at most 366 days; no date means today.
+- CSV export is UTF-8 with a BOM, CRLF line endings, and a guard that prefixes cells starting with `=`, `+`, `-`, `@`, a tab or a carriage return so spreadsheets do not execute them.
+
+## Data model
+
+| Schema | Tables |
+| --- | --- |
+| `"user"` | `users` (account and profile, `is_active`, `password_hash`), `refresh_tokens`, `password_resets`, `test_account` (legacy, unused) |
+| `role` | `roles`, `account_roles`, plus `permissions` and `role_permissions` (schema only, unused) |
+| `attendance` | `attendance_records`, `qr_codes` (hashed token, `location` JSONB, expiry), `outbox`, `gates` (legacy, written as `NULL`) |
+| `report` | `report_definitions`, `report_generations` (schema only, unused) |
+
+The nine migrations in `src/database/migrations/` are, in order: the baseline snapshot, user hardening (password change stamp, case-insensitive unique email, base roles), refresh tokens, password resets, demo accounts, extra roles, QR geolocation, a role repair/backfill, and dropping the legacy `attendance_records.locations` column.
+
+## Frontend
+
+| Route | Page | Access |
+| --- | --- | --- |
+| `/login`, `/signup`, `/forgot-password`, `/reset-password` | auth pages | public |
+| `/kiosk` | camera scanner | public |
+| `/employee/dashboard`, `/employee/profile` | employee area | signed in, not an admin |
+| `/admin/dashboard`, `/admin/management`, `/admin/statistics`, `/admin/profile` | admin area | `admin` only |
+
+Auth state lives in `context/AuthContext.tsx`. Login, sign-up, sign-out, password reset, the kiosk, the reports page, the employee dashboard and the admin Management page all call the API.
+
+### Still mocked
+
+- `/admin/dashboard` statistics, trend and recent activity come from `mocks/attendance.ts` and `mocks/statistics.ts`; its employee count comes from the mock list in `AuthContext`.
+- Profile editing on the profile pages (`components/profile/EditProfileModal.tsx`) applies `localStorage` overrides instead of calling the API. Admins edit employees on `/admin/management`.
+
+## Known limitations
+
+- A shift that ends after midnight produces no working hours; there is no night-shift support.
+- No rate limiting on `/api/attendance/scan`, `/api/auth/forgot-password` or login attempts.
+- `GET /api/users` returns every account; search and paging happen in the browser.
+- Absence is weekday-only — public holidays are not modelled.
+- `POST /api/auth/register` accepts the role from the client; a real deployment must assign it server-side.
+- There is no delete-account endpoint, so the Management page disables the action.
+- The HR/Payroll gateways in `infrastructure/external/hr-payroll/` are not wired into `app.ts`; `attendance.outbox` is where a publisher would read from.
+- `"user".test_account` holds plaintext demo passwords and is kept only for the historical schema.
+
+## Repository layout
 
 ```text
 TMC_System/
-├── public/
-│   └── favicon.svg
 ├── src/
-│   ├── back/
-│   │   └── package.json
 │   ├── backend/
-│   │   ├── config/
-│   │   │   └── env.ts
-│   │   ├── infrastructure/
-│   │   │   └── external/
-│   │   │       └── hr-payroll/
-│   │   │           ├── hr-payroll-http.gateway.ts
-│   │   │           └── logging-hr-payroll.gateway.ts
+│   │   ├── app.ts                  # composition root
+│   │   ├── server.ts
+│   │   ├── config/env.ts
 │   │   ├── modules/
-│   │   │   ├── attendance/              # currently empty
-│   │   │   ├── report/                  # attendance report + CSV export
-│   │   │   ├── role/                    # currently empty
-│   │   │   └── user/
-│   │   │       ├── controller/
-│   │   │       │   └── auth.ts
-│   │   │       ├── domain/
-│   │   │       │   └── auth-user.ts
-│   │   │       ├── repository/
-│   │   │       │   ├── auth.repository.ts
-│   │   │       │   └── postgres-auth.repository.ts
-│   │   │       ├── routes/
-│   │   │       │   └── auth.routes.ts
-│   │   │       └── service/
-│   │   │           └── auth.service.ts
-│   │   ├── shared/
-│   │   │   ├── errors/
-│   │   │   │   └── app-error.ts
-│   │   │   └── http/
-│   │   │       ├── http-server.ts
-│   │   │       ├── http.types.ts
-│   │   │       └── parsers.ts
-│   │   ├── app.ts
-│   │   └── server.ts
+│   │   │   ├── user/               # auth, sessions, password reset, admin profiles
+│   │   │   ├── attendance/         # QR issuing, scanning, outbox
+│   │   │   └── report/             # aggregation, statuses, CSV
+│   │   ├── infrastructure/external/
+│   │   │   ├── mail/               # SMTP reset mail
+│   │   │   └── hr-payroll/         # unwired HTTP and logging gateways
+│   │   └── shared/                 # errors, http handlers, security, test harness
 │   ├── database/
-│   │   ├── config.ts
-│   │   └── TMC_db.sql
+│   │   ├── config.ts               # pg pool + dotenv
+│   │   ├── migrations/             # node-pg-migrate SQL, 0001-0009
+│   │   └── TMC_db.sql              # legacy snapshot
 │   └── frontend/
-│       ├── components/
-│       │   ├── attendance/
-│       │   │   └── AttendanceTable.tsx
-│       │   ├── common/
-│       │   │   ├── AttendanceStatusTag.tsx
-│       │   │   ├── BrandLogo.tsx
-│       │   │   ├── ConfirmModal.tsx
-│       │   │   ├── EmptyState.tsx
-│       │   │   ├── PageLoading.tsx
-│       │   │   ├── QRCodeModal.tsx
-│       │   │   └── StatCard.tsx
-│       │   ├── dashboard/
-│       │   │   └── AttendanceTrendChart.tsx
-│       │   ├── layout/
-│       │   │   ├── AppHeader.tsx
-│       │   │   ├── AppLayout.tsx
-│       │   │   ├── AuthLayout.tsx
-│       │   │   ├── BreadcrumbHeader.tsx
-│       │   │   ├── Sidebar.tsx
-│       │   │   └── UserAvatarDropdown.tsx
-│       │   └── profile/
-│       │       ├── EditProfileModal.tsx
-│       │       └── ProfileCard.tsx
-│       ├── context/
-│       │   ├── AuthContext.tsx
-│       │   └── authContextValue.ts
-│       ├── hooks/
-│       │   ├── useAuth.ts
-│       │   └── useClock.ts
-│       ├── layouts/
-│       │   ├── AdminLayout.tsx
-│       │   └── EmployeeLayout.tsx
-│       ├── mocks/
-│       │   ├── attendance.ts
-│       │   ├── statistics.ts
-│       │   └── users.ts
-│       ├── pages/
-│       │   ├── admin/
-│       │   │   ├── AdminDashboardPage.tsx
-│       │   │   ├── AdminProfilePage.tsx
-│       │   │   ├── AttendanceStatisticsPage.tsx
-│       │   │   └── ManagementPage.tsx       # /admin/management
-│       │   ├── auth/
-│       │   │   ├── ForgotPasswordPage.tsx
-│       │   │   ├── LoginPage.tsx
-│       │   │   └── SignUpPage.tsx
-│       │   ├── employee/
-│       │   │   ├── EmployeeDashboardPage.tsx
-│       │   │   └── EmployeeProfilePage.tsx
-│       │   ├── kiosk/
-│       │   │   └── KioskPage.tsx
-│       │   └── NotFoundPage.tsx
-│       ├── routes/
-│       │   ├── AppRoutes.tsx
-│       │   └── ProtectedRoute.tsx
-│       ├── services/
-│       │   └── auth.api.ts
-│       ├── styles/
-│       │   ├── abstracts/
-│       │   │   ├── _mixins.scss
-│       │   │   └── _variables.scss
-│       │   ├── base/
-│       │   │   ├── _antd-overrides.scss
-│       │   │   ├── _reset.scss
-│       │   │   └── _typography.scss
-│       │   ├── components/
-│       │   │   ├── _attendance.scss
-│       │   │   ├── _auth.scss
-│       │   │   ├── _common.scss
-│       │   │   ├── _dashboard.scss
-│       │   │   ├── _kiosk.scss
-│       │   │   ├── _management.scss
-│       │   │   ├── _profile.scss
-│       │   │   └── _statistics.scss
-│       │   ├── layouts/
-│       │   │   ├── _app-layout.scss
-│       │   │   └── _auth-layout.scss
-│       │   └── main.scss
-│       ├── types/
-│       │   ├── attendance.ts
-│       │   ├── auth.ts
-│       │   └── navigation.ts
-│       ├── utils/
-│       │   ├── async.ts
-│       │   ├── attendance.ts
-│       │   ├── csv.ts
-│       │   ├── date.ts
-│       │   └── user.ts
-│       ├── App.tsx
-│       ├── main.tsx
-│       └── theme.ts
-├── .env
-├── .gitignore
-├── .oxlintrc.json
-├── Implements.md
-├── README.md
-├── UI_plan.md
-├── UI_requirements.md
-├── index.html
-├── package-lock.json
-├── package.json
-├── tsconfig.app.json
-├── tsconfig.backend.json
-├── tsconfig.json
-├── tsconfig.node.json
-└── vite.config.ts
+│       ├── components/             # layout, tables, modals, charts
+│       ├── context/  hooks/        # session state
+│       ├── pages/                  # auth, employee, admin, kiosk
+│       ├── routes/                 # route table and role guard
+│       ├── services/               # auth, user, attendance and report API clients
+│       ├── mocks/                  # data still used by the admin dashboard
+│       ├── styles/  types/  utils/
+│       └── App.tsx  main.tsx  theme.ts
+├── docker-compose.yml
+├── .env.example
+├── API.md
+├── UI_requirements.md              # UI brief
+├── UI_plan.md                      # UI implementation notes
+└── Attendance.md  attendance_implement.md  Implements.md   # module notes
 ```
-
-## Application Structure
-
-### Backend
-
-The backend is organized by modules. The user module contains the authentication flow:
-
-- `controller/auth.ts` parses HTTP requests and formats responses.
-- `service/auth.service.ts` implements the login use case and role resolution.
-- `domain/auth-user.ts` defines authentication user types and role mapping.
-- `repository/auth.repository.ts` defines the persistence contract.
-- `repository/postgres-auth.repository.ts` implements the SQL query against `"user".test_account`.
-- `routes/auth.routes.ts` registers the login endpoint.
-- `app.ts` is the composition root that wires the repository, service, controller, and routes.
-- `shared/http` contains the small HTTP server and request parsing helpers.
-- `shared/errors` contains application errors with HTTP status codes.
-
-### Frontend
-
-- `pages/` contains the screens for authentication, employees, administrators, and the kiosk.
-- `pages/admin/ManagementPage.tsx` provides employee account management with view, update, and delete modals.
-- `components/` contains reusable layout, table, form, dashboard, and modal components.
-- `context/AuthContext.tsx` manages the current user session and calls the login API.
-- `services/auth.api.ts` sends login requests to the backend.
-- `routes/` contains route definitions and role-based route protection.
-- `mocks/` contains local attendance, statistics, and user data used by the current UI.
-- `styles/` contains all SCSS styling.
-- `types/` contains shared frontend TypeScript types.
-- `utils/` contains date, CSV, attendance, and user presentation helpers.
-
-### Database
-
-- `src/database/config.ts` creates the PostgreSQL connection pool and loads `.env`.
-- `src/database/TMC_db.sql` contains the schema, tables, and seed accounts.
-
-## Authentication Notes
-
-- Login credentials are verified against `"user".test_account`.
-- Passwords are currently stored as plain text in the demo table.
-- No JWT or server-side session is used.
-- The frontend keeps the logged-in user in local storage for routing and page state.
-- This authentication implementation is intended for coursework and demonstration purposes, not production use.

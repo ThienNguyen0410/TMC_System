@@ -341,6 +341,7 @@
 }
 
 .qr-modal__frame {
+  position: relative;
   padding: 18px;
   background: $color-surface;
   border: 1px solid $color-border;
@@ -351,6 +352,70 @@
     width: 224px !important;
     height: 224px !important;
   }
+}
+
+.qr-modal__frame--expired canvas {
+  filter: blur(6px);
+  opacity: 0.4;
+}
+
+.qr-modal__expired {
+  position: absolute;
+  inset: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 18px;
+  text-align: center;
+  background: rgba(248, 250, 252, 0.86);
+  border-radius: $radius-md;
+
+  strong {
+    font-size: 1rem;
+    color: $color-danger;
+  }
+
+  span {
+    font-size: 0.78rem;
+    color: $color-text-muted;
+  }
+}
+
+.qr-modal__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-3;
+  padding: $space-5 0;
+  font-size: 0.84rem;
+  color: $color-text-muted;
+}
+
+.qr-modal__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: $space-2;
+  margin-top: $space-4;
+  font-size: 0.75rem;
+  color: $color-text-soft;
+
+  .ant-tag {
+    margin-inline-end: 0;
+  }
+}
+
+.qr-modal .ant-progress {
+  width: 100%;
+  margin-top: $space-2;
+}
+
+.qr-modal .ant-alert {
+  width: 100%;
+  text-align: left;
 }
 
 .qr-modal__identity {

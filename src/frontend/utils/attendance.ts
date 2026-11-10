@@ -1,4 +1,8 @@
-import type { AttendanceStatus } from '../types/attendance'
+import type {
+  AttendanceRecord,
+  AttendanceStatus,
+  EmployeeAttendanceSummary,
+} from '../types/attendance'
 
 interface AttendanceStatusMeta {
   label: string
@@ -23,3 +27,18 @@ export const attendanceStatusOptions = (
 export function getStatusOrder(status: AttendanceStatus): number {
   return attendanceStatusMeta[status].order
 }
+
+export function computeEmployeeSummary(records: AttendanceRecord[]): EmployeeAttendanceSummary {
+  return {
+    present: records.filter((record) => record.status === 'present').length,
+    late: records.filter((record) => record.status === 'late').length,
+    absent: records.filter((record) => record.status === 'absent').length,
+    incomplete: records.filter((record) => record.status === 'incomplete').length,
+    totalHours:
+      Math.round(
+        records.reduce((total, record) => total + (record.workingHours ?? 0), 0) * 100,
+      ) / 100,
+    totalRecords: records.length,
+  }
+}
+
