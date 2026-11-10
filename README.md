@@ -11,7 +11,7 @@ The API, database and most screens are real: authentication with JWT and a refre
 - **QR attendance** — a 5-second single-use QR issued to the signed-in employee, scanned by a kiosk page through the camera.
 - **Geofence and cooldown** — the QR and the kiosk must be within 1 m of each other; a second scan within 30 s is rejected.
 - **Reports** — per employee per day: check-in, check-out, status and working hours, with CSV export for admins.
-- **Administration** — admin-only account list and profile editing, plus role-based routing.
+- **Administration** — admin-only account list, profile editing and account deletion, plus role-based routing.
 
 ## Tech stack
 
@@ -217,10 +217,10 @@ Auth state lives in `context/AuthContext.tsx`. Login, sign-up, sign-out, passwor
 
 - A shift that ends after midnight produces no working hours; there is no night-shift support.
 - No rate limiting on `/api/attendance/scan`, `/api/auth/forgot-password` or login attempts.
-- `GET /api/users` returns every account; search and paging happen in the browser.
+- `GET /api/users` returns every active account; search and paging happen in the browser.
 - Absence is weekday-only — public holidays are not modelled.
 - `POST /api/auth/register` accepts the role from the client; a real deployment must assign it server-side.
-- There is no delete-account endpoint, so the Management page disables the action.
+- Deleting an account deactivates it and cannot be undone from the UI; there is no restore endpoint, so reactivating means setting `is_active` back in the database.
 - The HR/Payroll gateways in `infrastructure/external/hr-payroll/` are not wired into `app.ts`; `attendance.outbox` is where a publisher would read from.
 - `"user".test_account` holds plaintext demo passwords and is kept only for the historical schema.
 
