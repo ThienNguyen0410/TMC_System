@@ -26,9 +26,5 @@ export interface RoleRepository {
    * assignment and the number of other active admins, then set the user's single role when the
    * guard allows it. Returns the resulting assignment, or null when the user does not exist.
    */
-  changeUserRole(
-    userId: string,
-    newRole: RoleName,
-    guard: RoleChangeGuard,
-  ): Promise<UserRoleAssignment | null>
+  changeUserRole(userId: string, newRole: RoleName, guard: RoleChangeGuard): Promise<UserRoleAssignment | null>
 }
