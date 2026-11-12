@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import express from 'express'
+import express, { type RequestHandler } from 'express'
 import { signAccessToken } from '../../../shared/security/tokens.ts'
 import { withServer } from '../../../shared/testing/with-server.ts'
 import type { AuthUser, UserRole } from '../../user/domain/auth-user.ts'
@@ -76,7 +76,8 @@ const serve = (run: (baseUrl: string) => Promise<void>) => {
 
   return withServer((app) => {
     app.use(express.json())
-    app.use('/api/attendance', createAttendanceRouter(controller, authService))
+    const allowAll: RequestHandler = (_request, _response, next) => next()
+    app.use('/api/attendance', createAttendanceRouter(controller, authService, allowAll))
   }, run)
 }
 

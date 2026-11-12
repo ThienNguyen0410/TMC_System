@@ -78,14 +78,20 @@ export const createApp = () => {
   )
   app.use(
     '/api/reports',
-    createReportRouter(
-      reportController,
+    createReportRouter(reportController, authService, {
+      viewOwn: requirePermission(roleRepository, 'attendance.view_own'),
+      viewAll: requirePermission(roleRepository, 'report.view'),
+      export: requirePermission(roleRepository, 'report.export'),
+    }),
+  )
+  app.use(
+    '/api/attendance',
+    createAttendanceRouter(
+      attendanceController,
       authService,
-      requirePermission(roleRepository, 'report.view'),
-      requirePermission(roleRepository, 'report.export'),
+      requirePermission(roleRepository, 'qr.view_own'),
     ),
   )
-  app.use('/api/attendance', createAttendanceRouter(attendanceController, authService))
   app.use('/api/rbac', createRoleRouter(roleController, authService, roleRepository))
 
   app.get('/api/health', (_request, response) => {

@@ -77,7 +77,11 @@ const serve = (run: (baseUrl: string) => Promise<void>, options: ServeOptions = 
   const service = new AttendanceReportService(repository, '09:00:00', () => TODAY)
   const controller = new AttendanceReportController(service, () => TODAY)
 
-  return withServer((app) => app.use('/api/reports', createReportRouter(controller, authService, requireRole('admin'), requireRole('admin'))), run)
+  return withServer((app) => app.use('/api/reports', createReportRouter(controller, authService, {
+        viewOwn: (_request, _response, next) => next(),
+        viewAll: requireRole('admin'),
+        export: requireRole('admin'),
+      })), run)
 }
 
 test('GET /api/reports/attendance returns the filter and the records', () =>
