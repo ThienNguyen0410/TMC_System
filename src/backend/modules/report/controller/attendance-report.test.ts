@@ -6,6 +6,7 @@ import type { AuthUser, UserRole } from '../../user/domain/auth-user.ts'
 import type { AuthRepository } from '../../user/repository/auth.repository.ts'
 import { AuthService } from '../../user/service/auth.service.ts'
 import type { DailyActivity, ReportEmployee } from '../domain/attendance-report.ts'
+import { requireRole } from '../../user/middleware/require-role.ts'
 import { createReportRouter } from '../routes/report.routes.ts'
 import { AttendanceReportService } from '../service/attendance-report.service.ts'
 import { InMemoryAttendanceReportRepository } from '../testing/in-memory-attendance-report.repository.ts'
@@ -76,7 +77,7 @@ const serve = (run: (baseUrl: string) => Promise<void>, options: ServeOptions = 
   const service = new AttendanceReportService(repository, '09:00:00', () => TODAY)
   const controller = new AttendanceReportController(service, () => TODAY)
 
-  return withServer((app) => app.use('/api/reports', createReportRouter(controller, authService)), run)
+  return withServer((app) => app.use('/api/reports', createReportRouter(controller, authService, requireRole('admin'), requireRole('admin'))), run)
 }
 
 test('GET /api/reports/attendance returns the filter and the records', () =>

@@ -9,6 +9,7 @@ import type { AuthRepository } from '../../user/repository/auth.repository.ts'
 import type { UserRepository } from '../../user/repository/user.repository.ts'
 import { AuthService } from '../../user/service/auth.service.ts'
 import { UserService } from '../../user/service/user.service.ts'
+import { requireRole } from '../middleware/require-role.ts'
 import { createUserRouter } from '../routes/user.routes.ts'
 import { UserController } from './user.ts'
 
@@ -129,7 +130,7 @@ const serve = (run: (baseUrl: string, repository: InMemoryUserRepository) => Pro
   return withServer(
     (app) => {
       app.use(express.json())
-      app.use('/api/users', createUserRouter(controller, authService))
+      app.use('/api/users', createUserRouter(controller, authService, requireRole('admin')))
     },
     (baseUrl) => run(baseUrl, repository),
   )

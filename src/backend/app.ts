@@ -23,6 +23,7 @@ import { AuthService } from './modules/user/service/auth.service.ts'
 import { UserService } from './modules/user/service/user.service.ts'
 import { RoleController } from './modules/role/controller/role.controller.ts'
 import { AdminProtectedRoleChangePolicy } from './modules/role/domain/admin-protected-role-change-policy.ts'
+import { requirePermission } from './modules/role/middleware/require-permission.ts'
 import { PostgresRoleRepository } from './modules/role/repository/postgres-role.repository.ts'
 import { createRoleRouter } from './modules/role/routes/role.routes.ts'
 import { RoleService } from './modules/role/service/role.service.ts'
@@ -70,8 +71,20 @@ export const createApp = () => {
   app.use(express.json())
 
   app.use('/api/auth', createAuthRouter(authController, authService))
-  app.use('/api/users', createUserRouter(userController, authService))
-  app.use('/api/reports', createReportRouter(reportController, authService))
+  // Who may use each area is decided by role permissions (role module), not by role names.
+  app.use(
+    '/api/users',
+    createUserRouter(userController, authService, requirePermission(roleRepository, 'user.manage')),
+  )
+  app.use(
+    '/api/reports',
+    createReportRouter(
+      reportController,
+      authService,
+      requirePermission(roleRepository, 'report.view'),
+      requirePermission(roleRepository, 'report.export'),
+    ),
+  )
   app.use('/api/attendance', createAttendanceRouter(attendanceController, authService))
   app.use('/api/rbac', createRoleRouter(roleController, authService, roleRepository))
 
