@@ -3,7 +3,7 @@ import type { GeoLocation } from './attendance.ts'
 
 export const QR_CODE_TTL_SECONDS = 5
 export const QR_CODE_TTL_MS = QR_CODE_TTL_SECONDS * 1000
-export const QR_LOCATION_TOLERANCE_METERS = 1
+export const QR_LOCATION_TOLERANCE_METERS = 15
 
 const EARTH_RADIUS_METERS = 6_371_000
 
@@ -67,5 +67,6 @@ export function locationWithinTolerance(
   right: GeoLocation,
   toleranceMeters = QR_LOCATION_TOLERANCE_METERS,
 ): boolean {
+  console.log("Distance", distanceInMeters(left, right))
   return distanceInMeters(left, right) <= toleranceMeters
 }

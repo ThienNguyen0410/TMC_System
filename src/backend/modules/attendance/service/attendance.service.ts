@@ -61,6 +61,10 @@ export class AttendanceService {
       throw new QrLocationMismatchError()
     }
 
+    console.log("QR code", qrCode.location)
+    console.log("Input" ,input.location)
+
+
     const employee = await this.repository.findEmployeeById(qrCode.employeeId)
 
     if (!employee || !employee.isActive) {
