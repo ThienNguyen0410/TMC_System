@@ -21,6 +21,12 @@ import { createAuthRouter } from './modules/user/routes/auth.routes.ts'
 import { createUserRouter } from './modules/user/routes/user.routes.ts'
 import { AuthService } from './modules/user/service/auth.service.ts'
 import { UserService } from './modules/user/service/user.service.ts'
+import { RoleController } from './modules/role/controller/role.controller.ts'
+import { AdminProtectedRoleChangePolicy } from './modules/role/domain/admin-protected-role-change-policy.ts'
+import { requirePermission } from './modules/role/middleware/require-permission.ts'
+import { PostgresRoleRepository } from './modules/role/repository/postgres-role.repository.ts'
+import { createRoleRouter } from './modules/role/routes/role.routes.ts'
+import { RoleService } from './modules/role/service/role.service.ts'
 import { errorHandler, notFoundHandler } from './shared/http/error-handler.ts'
 
 export const createApp = () => {
@@ -53,6 +59,10 @@ export const createApp = () => {
   })
   const attendanceController = new AttendanceController(qrCodeService, attendanceService)
 
+  const roleRepository = new PostgresRoleRepository(pool)
+  const roleService = new RoleService(roleRepository, new AdminProtectedRoleChangePolicy())
+  const roleController = new RoleController(roleService)
+
   const app = express()
 
   app.disable('x-powered-by')
@@ -61,9 +71,28 @@ export const createApp = () => {
   app.use(express.json())
 
   app.use('/api/auth', createAuthRouter(authController, authService))
-  app.use('/api/users', createUserRouter(userController, authService))
-  app.use('/api/reports', createReportRouter(reportController, authService))
-  app.use('/api/attendance', createAttendanceRouter(attendanceController, authService))
+  // Who may use each area is decided by role permissions (role module), not by role names.
+  app.use(
+    '/api/users',
+    createUserRouter(userController, authService, requirePermission(roleRepository, 'user.manage')),
+  )
+  app.use(
+    '/api/reports',
+    createReportRouter(reportController, authService, {
+      viewOwn: requirePermission(roleRepository, 'attendance.view_own'),
+      viewAll: requirePermission(roleRepository, 'report.view'),
+      export: requirePermission(roleRepository, 'report.export'),
+    }),
+  )
+  app.use(
+    '/api/attendance',
+    createAttendanceRouter(
+      attendanceController,
+      authService,
+      requirePermission(roleRepository, 'qr.view_own'),
+    ),
+  )
+  app.use('/api/rbac', createRoleRouter(roleController, authService, roleRepository))
 
   app.get('/api/health', (_request, response) => {
     response.json({ data: { status: 'ok' } })
