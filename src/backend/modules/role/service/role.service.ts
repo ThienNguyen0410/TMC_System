@@ -8,19 +8,14 @@ import {
   RBAC_MANAGE_PERMISSION,
   type Permission,
   type Role,
-  type RoleName,
-  type UserRoleAssignment,
 } from '../domain/role.ts'
-import type { RoleChangePolicy } from '../domain/role-change-policy.ts'
 import type { RoleRepository } from '../repository/role.repository.ts'
 
 export class RoleService {
   private readonly repository: RoleRepository
-  private readonly policy: RoleChangePolicy
 
-  constructor(repository: RoleRepository, policy: RoleChangePolicy) {
+  constructor(repository: RoleRepository) {
     this.repository = repository
-    this.policy = policy
   }
 
   listPermissions(): Promise<Permission[]> {
@@ -63,53 +58,6 @@ export class RoleService {
 
   getPermissionsForUser(userId: string): Promise<string[]> {
     return this.repository.findPermissionCodesByUserId(userId)
-  }
-
-  async getUserRole(userId: string): Promise<UserRoleAssignment> {
-    const assignment = await this.repository.findUserRole(userId)
-
-    if (!assignment) {
-      throw new NotFoundError(`User ${userId} not found.`)
-    }
-
-    return assignment
-  }
-
-  async changeUserRole(
-    actorId: string,
-    userId: string,
-    newRole: RoleName,
-  ): Promise<UserRoleAssignment> {
-    const current = await this.getUserRole(userId)
-    this.assertActive(current)
-
-    if (current.role === newRole) {
-      return current
-    }
-
-    const updated = await this.repository.changeUserRole(userId, newRole, (locked, otherActiveAdminCount) => {
-      // Re-checked on locked data: the account may have changed since the first read.
-      this.assertActive(locked)
-
-      if (locked.role === newRole) {
-        return false
-      }
-
-      this.policy.assertCanChange({ actorId, target: locked, newRole, otherActiveAdminCount })
-      return true
-    })
-
-    if (!updated) {
-      throw new NotFoundError(`User ${userId} not found.`)
-    }
-
-    return updated
-  }
-
-  private assertActive(assignment: UserRoleAssignment): void {
-    if (!assignment.isActive) {
-      throw new ConflictError('Cannot change the role of a deactivated account.')
-    }
   }
 
   private async assertPermissionsExist(codes: string[]): Promise<void> {

@@ -18,10 +18,3 @@ export interface Role {
   description: string | null
   permissionCodes: string[]
 }
-
-export interface UserRoleAssignment {
-  userId: string
-  username: string
-  role: RoleName
-  isActive: boolean
-}

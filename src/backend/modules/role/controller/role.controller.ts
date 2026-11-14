@@ -2,12 +2,7 @@ import type { Request, Response } from 'express'
 import type { z } from 'zod'
 import { ValidationError } from '../../../shared/errors/app-error.ts'
 import type { RoleService } from '../service/role.service.ts'
-import {
-  changeUserRoleSchema,
-  replaceRolePermissionsSchema,
-  updateRoleSchema,
-  userIdParamSchema,
-} from './role.schema.ts'
+import { replaceRolePermissionsSchema, updateRoleSchema } from './role.schema.ts'
 
 const parseOrThrow = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const parsed = schema.safeParse(value)
@@ -58,27 +53,8 @@ export class RoleController {
     response.status(200).json({ data: { role } })
   }
 
-  async getUserRole(request: Request, response: Response): Promise<void> {
-    const assignment = await this.service.getUserRole(this.userId(request))
-    response.status(200).json({ data: { assignment } })
-  }
-
-  async changeUserRole(request: Request, response: Response): Promise<void> {
-    const { role } = parseOrThrow(changeUserRoleSchema, request.body)
-    const assignment = await this.service.changeUserRole(
-      this.actorId(response),
-      this.userId(request),
-      role,
-    )
-    response.status(200).json({ data: { assignment } })
-  }
-
   private roleName(request: Request): string {
     return String(request.params.roleName)
-  }
-
-  private userId(request: Request): string {
-    return parseOrThrow(userIdParamSchema, request.params.userId)
   }
 
   /** Set by requireAuth. */
