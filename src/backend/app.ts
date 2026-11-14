@@ -22,7 +22,6 @@ import { createUserRouter } from './modules/user/routes/user.routes.ts'
 import { AuthService } from './modules/user/service/auth.service.ts'
 import { UserService } from './modules/user/service/user.service.ts'
 import { RoleController } from './modules/role/controller/role.controller.ts'
-import { AdminProtectedRoleChangePolicy } from './modules/role/domain/admin-protected-role-change-policy.ts'
 import { requirePermission } from './modules/role/middleware/require-permission.ts'
 import { PostgresRoleRepository } from './modules/role/repository/postgres-role.repository.ts'
 import { createRoleRouter } from './modules/role/routes/role.routes.ts'
@@ -60,7 +59,7 @@ export const createApp = () => {
   const attendanceController = new AttendanceController(qrCodeService, attendanceService)
 
   const roleRepository = new PostgresRoleRepository(pool)
-  const roleService = new RoleService(roleRepository, new AdminProtectedRoleChangePolicy())
+  const roleService = new RoleService(roleRepository)
   const roleController = new RoleController(roleService)
 
   const app = express()

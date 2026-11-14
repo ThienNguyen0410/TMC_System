@@ -31,12 +31,6 @@ export const createRoleRouter = (
   router.put('/roles/:roleName/permissions', canManage, (request, response) =>
     controller.replaceRolePermissions(request, response),
   )
-  router.get('/users/:userId/role', canManage, (request, response) =>
-    controller.getUserRole(request, response),
-  )
-  router.put('/users/:userId/role', canManage, (request, response) =>
-    controller.changeUserRole(request, response),
-  )
 
   return router
 }
